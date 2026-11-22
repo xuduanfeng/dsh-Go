@@ -24,11 +24,23 @@ export function createFilesystem(roots, policy, options = {}) {
       mounts.push({ mountPoint: grant.mountPoint, filesystem: new NativeGrantFs(binding, grant.ticket) });
     }
   } catch (error) { for (const mount of mounts) mount.filesystem.close(); throw error; }
-  const permittedRoots = [...roots, ...seen];
+  // Read-only roots (e.g. DSH_HOME/attachments) are mounted for reading only.
+  const readOnlyRoots = Array.isArray(options.readOnlyRoots) ? options.readOnlyRoots
+    .filter(root => typeof root === 'string' && root.startsWith('/'))
+    .map(root => resolve(root)) : [];
+  const permittedRoots = [...roots, ...seen, ...readOnlyRoots];
   let ready = false;
   let filesystem;
   try { filesystem = new MountableFs({
     mounts: [...mounts, ...roots.map(root => ({
+      mountPoint: root,
+      filesystem: new ReadWriteFs({
+        root,
+        allowSymlinks: true,
+        maxFileReadSize: 64 * 1024 * 1024,
+        maxCopySize: 64 * 1024 * 1024,
+      }),
+    })), ...readOnlyRoots.map(root => ({
       mountPoint: root,
       filesystem: new ReadWriteFs({
         root,
@@ -65,6 +77,14 @@ export function createFilesystem(roots, policy, options = {}) {
           requirePath(args[1]);
           requirePath(resolve(dirname(args[1]), args[0]));
           return method.apply(target, args);
+        }
+        if (mutations.has(key)) {
+          const target = key === 'cp' || key === 'mv' || key === 'symlink' || key === 'link' ? args[1] : args[0];
+          for (const item of (Array.isArray(target) ? target : [target])) {
+            if (typeof item === 'string' && readOnlyRoots.some(root => isInside(root, resolve(item)))) {
+              throw Object.assign(new Error('EACCES: OHOS_SANDBOX_DENIED: 附件目录是只读的，不能写入或修改'), { code: 'EACCES' });
+            }
+          }
         }
         const path = resolve(args[0]);
         const ancestor = permittedRoots.some(root => isInside(path, root)) || path === '/';

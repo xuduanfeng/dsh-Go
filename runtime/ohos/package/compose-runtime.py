@@ -444,6 +444,13 @@ def assemble(args):
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix='.ohos-compose-', dir=output.parent))
     try:
+        dsh_input = dsh
+        if args.vendor_overrides:
+            vendor = args.vendor_overrides.resolve(strict=True)
+            overlay = staging / 'dsh-vendor'
+            shutil.copytree(dsh, overlay, symlinks=True)
+            subprocess.run([str(vendor / 'apply.sh'), str(overlay)], check=True)
+            dsh_input = overlay
         raw = staging / 'rawfile/dsh-runtime'
         composer = Composer(raw / 'files')
         deletion_root = staging / 'generated/ohos-deletion'
@@ -452,8 +459,8 @@ def assemble(args):
         deletion_reason = 'OH 原子删除使用已核源差分生成的专用模块；共享 Android 输入保持原字节'
         dsh_file_rules = {**config['dshRemoveFiles'], deletion['files'][0]['destination']: deletion_reason}
         # Only the npm prefix's node_modules, never a prior staged runtime subtree.
-        composer.dependencies(dsh, 'dsh', '', packages['dsh'], config['dshRemovePackages'], dsh_file_rules)
-        composer.add(dsh / 'package.json', dsh, 'dsh', 'package.json')
+        composer.dependencies(dsh_input, 'dsh', '', packages['dsh'], config['dshRemovePackages'], dsh_file_rules)
+        composer.add(dsh_input / 'package.json', dsh_input, 'dsh', 'package.json')
         composer.dependencies(process, 'process-dependencies', 'runtime/ohos/process',
                               packages['process'], config['processRemovePackages'], config['processRemoveFiles'])
         source_runtime = repo / 'runtime/ohos'
@@ -588,6 +595,8 @@ def main():
     parser.add_argument('--node', type=Path, required=True)
     parser.add_argument('--runtime-core', type=Path, required=True,
                         help='Actual RuntimeCore.ets consumer; type syntax is erased for Linux validation')
+    parser.add_argument('--vendor-overrides', type=Path,
+                        help='Directory with vendor-overrides/apply.sh; applied to a copy of --dsh-prefix before composition')
     parser.add_argument('--keep-expanded', action='store_true',
                         help='Keep the verified expanded tree outside rawfile for build-time inspection only')
     args = parser.parse_args()

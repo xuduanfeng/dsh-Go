@@ -11,11 +11,11 @@ import { createHttpDispatcher } from '../net/dispatcher.mjs';
 import { nodeCommand } from './node-command.mjs';
 import { nodeScriptAvailable } from './node-script.mjs';
 
-const { argv, cwd, roots, stdin, env, policy, linuxCommands = [] } = workerData;
+const { argv, cwd, roots, stdin, env, policy, readOnlyRoots = [], linuxCommands = [] } = workerData;
 const workspaceGrant = workerData.dshOhosWorkspaceGrants !== undefined;
 const ownedGitClient = createOwnedGitClient(parentPort);
 const linuxClient = createLinuxForwardClient(parentPort);
-const filesystem = createFilesystem(roots, policy);
+const filesystem = createFilesystem(roots, policy, { readOnlyRoots });
 if (workspaceGrant && !(await filesystem.fs.stat(cwd)).isDirectory) throw Object.assign(new Error('ENOTDIR'), { code: 'ENOTDIR' });
 const nodeAvailable = !workspaceGrant && nodeScriptAvailable();
 const unsupportedGrantCommand = async () => ({ stdout: '', stderr:
@@ -38,7 +38,7 @@ const bash = new Bash({
       try { return await executeGit(args, { ...context, ownedGit: ownedGitClient.api, fetch: createFetch(dispatcher) }); }
       finally { await dispatcher.destroy(); }
     }),
-    ...(nodeAvailable ? [defineCommand('node', nodeCommand({ roots,
+    ...(nodeAvailable ? [defineCommand('node', nodeCommand({ roots, readOnlyRoots,
       workspaceRoots: [policy?.workspaceRoot ?? cwd], readOnly: policy?.mode === 'read-only' }))]
       : workspaceGrant ? [defineCommand('node', unsupportedGrantCommand)] : []),
     // Statement-buffered: each runs to completion as one job in the App's Linux.

@@ -1,14 +1,14 @@
 import { createNodeScriptWorker, formatNodeScriptError } from './node-script.mjs';
 
 /** Preserve just-bash routing: a node command is buffered inside its statement. */
-export function nodeCommand({ roots, workspaceRoots, readOnly }) {
+export function nodeCommand({ roots, workspaceRoots, readOnly, readOnlyRoots = [] }) {
   return async (args, ctx) => {
     ctx.signal?.throwIfAborted();
     let worker;
     try {
       const env = Object.fromEntries(ctx.env);
       if (globalThis[Symbol.for('dsh.go.ohos.sim')] === true && process.env.DSH_GO_OHOS_SIM_PLATFORM) env.DSH_GO_OHOS_SIM_PLATFORM = process.env.DSH_GO_OHOS_SIM_PLATFORM;
-      worker = createNodeScriptWorker({ args, cwd: ctx.cwd, roots, workspaceRoots, readOnly,
+      worker = createNodeScriptWorker({ args, cwd: ctx.cwd, roots, workspaceRoots, readOnly, readOnlyRoots,
         env, stdin: Buffer.from(ctx.stdin, 'latin1') });
     } catch (error) {
       return { stdout: '', stderr: `${error.code ?? 'ERR_OHOS_NODE_SCRIPT'}: ${error.message}\n`,

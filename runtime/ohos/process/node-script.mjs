@@ -68,13 +68,14 @@ function inlineEntry(source, mode, cwd) {
 }
 
 /** Native script entries preserve CJS/ESM main semantics; inline code uses the same guarded Worker. */
-export function createNodeScriptWorker({ args, cwd, roots, workspaceRoots, readOnly = false, env, stdin = '', streamStdin = false }) {
+export function createNodeScriptWorker({ args, cwd, roots, workspaceRoots, readOnly = false, readOnlyRoots = [], env, stdin = '', streamStdin = false }) {
   if (!nodeScriptAvailable()) throw failure('ERR_OHOS_NODE_PRELOAD_REQUIRED', 'Node scripts require the inherited OHOS product preload');
   if (!Array.isArray(args) || args.some(value => typeof value !== 'string' || value.includes('\0'))) throw new TypeError('Node script arguments must be NUL-free strings');
   if (args[0] === '--') args = args.slice(1);
   if (typeof cwd !== 'string' || !isAbsolute(cwd) || !Array.isArray(roots) || !Array.isArray(workspaceRoots)) throw new TypeError('Node script requires explicit absolute working roots');
   const canonicalCwd = realpathSync(cwd);
   const canonicalRoots = roots.map(root => realpathSync(root)), canonicalWorkspaces = workspaceRoots.map(root => realpathSync(root));
+  const canonicalReadOnly = readOnlyRoots.map(root => { try { return realpathSync(root); } catch { return resolve(root); } });
   if (canonicalRoots.includes('/') || canonicalWorkspaces.includes('/')
       || !canonicalWorkspaces.some(root => inside(root, canonicalCwd))
       || !canonicalRoots.some(root => inside(root, canonicalCwd))) throw failure('EACCES', 'EACCES: OHOS_SANDBOX_DENIED: Node script entry or cwd is outside the authorized roots');
@@ -103,7 +104,7 @@ export function createNodeScriptWorker({ args, cwd, roots, workspaceRoots, readO
   }
   return new Worker(entry, {
     workerData: { dshOhosNodeScript: { protocol: 1, cwd: canonicalCwd, roots: canonicalRoots,
-      workspaceRoots: canonicalWorkspaces, readOnly, stdin: input, streamStdin, inline } },
+      workspaceRoots: canonicalWorkspaces, readOnly, readOnlyRoots: canonicalReadOnly, stdin: input, streamStdin, inline } },
     argv, env, stdin: streamStdin, stdout: true, stderr: true,
     resourceLimits: { maxOldGenerationSizeMb: 256 },
     // Preserve inherited --jitless and the sole product --import.

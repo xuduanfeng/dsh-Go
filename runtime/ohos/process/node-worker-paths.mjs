@@ -28,6 +28,7 @@ export function installNodeWorkerPaths(config) {
   };
   if (!Array.isArray(config.roots) || !config.roots.length || !Array.isArray(config.workspaceRoots) || !config.workspaceRoots.length) throw new TypeError('Node Worker requires explicit roots');
   const roots = config.roots.map(canonicalDirectory), workspaces = config.workspaceRoots.map(canonicalDirectory);
+  const readOnlyRoots = Array.isArray(config.readOnlyRoots) ? config.readOnlyRoots.map(canonicalDirectory) : [];
   if (workspaces.some(path => !roots.some(root => inside(root, path)))) throw denied();
   let cwd = canonicalDirectory(config.cwd);
   if (!workspaces.some(root => inside(root, cwd))) throw denied();
@@ -50,7 +51,8 @@ export function installNodeWorkerPaths(config) {
     if (handle) handle.once('close', () => { if (descriptors.get(fd) === owned) descriptors.delete(fd); });
     return owned;
   };
-  const permitted = path => roots.some(root => inside(root, path));
+  const permitted = path => roots.some(root => inside(root, path)) || readOnlyRoots.some(root => inside(root, path));
+  const readOnlyTarget = path => readOnlyRoots.some(root => inside(root, path));
   const pathString = value => {
     if (typeof value === 'string') return value;
     if (value instanceof URL) return fileURLToPath(value);
@@ -127,7 +129,8 @@ export function installNodeWorkerPaths(config) {
   };
   const transform = (operation, values, completion) => {
     const rule = pathOperations[operation], args = [...values];
-    if (readOnly && (rule.write || (rule.open && flagsWrite(args[1])) || (rule.stream && flagsWrite(args[1]?.flags)))) throw denied();
+    const writes = rule.write || (rule.open && flagsWrite(args[1])) || (rule.stream && flagsWrite(args[1]?.flags));
+    if (readOnly && writes) throw denied();
     if (rule.glob) { globArgs(args, completion); return args; }
     if (rule.utf8Stream) {
       if (args[0]?.fd !== undefined) requireDescriptor(args[0].fd);
@@ -138,6 +141,7 @@ export function installNodeWorkerPaths(config) {
       // Stream constructors intentionally ignore path when an fd is supplied.
       if (rule.stream && args[1]?.fd !== undefined && args[1]?.fd !== null) { requireDescriptor(args[1].fd); continue; }
       args[index] = rebase(args[index], rule);
+      if (writes && readOnlyTarget(Buffer.isBuffer(args[index]) ? args[index].toString() : args[index])) throw denied();
     }
     if (rule.symlink) {
       const target = pathString(args[0]);

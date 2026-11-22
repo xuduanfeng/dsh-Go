@@ -83,6 +83,16 @@
                 "scheme": "file",
                 "type": "image/*",
                 "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "application/vnd.dshgo+json",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "utd": "com.xuduanfeng.dshgo.conversation",
+                "linkFeature": "FileOpen"
               }
             ]
           },

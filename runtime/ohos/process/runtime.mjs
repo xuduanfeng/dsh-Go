@@ -1,4 +1,4 @@
-import { lstatSync, mkdtempSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, realpathSync, statSync } from 'node:fs';
 import { lstat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
@@ -75,11 +75,18 @@ export class VirtualSubprocessRuntime {
       this.temporaryRoot = realpathSync(this.temporaryRoot);
     }
     this.roots = distinctRoots([...this.workspaceRoots, this.temporaryRoot]);
+    // DSH_HOME/attachments is exposed read-only so scripts can open uploaded files.
+    const dshHome = process.env.DSH_HOME;
+    const attachmentRoot = dshHome ? join(dshHome, 'attachments') : undefined;
+    this.attachmentRoot = attachmentRoot;
+    this.readOnlyRoots = attachmentRoot !== undefined && existsSync(attachmentRoot) ? [realpathSync(attachmentRoot)] : [];
     this.onSpillFailure = onSpillFailure;
   }
 
   prepare(argv, policy, signal) {
     if (this.closed) throw new Error('鸿蒙虚拟进程服务已关闭');
+    // attachments may be created by the first upload after the engine started.
+    if (this.attachmentRoot && this.readOnlyRoots.length === 0 && existsSync(this.attachmentRoot)) this.readOnlyRoots = [realpathSync(this.attachmentRoot)];
     signal?.throwIfAborted();
     validateArgv(argv);
     if (policy.mode !== 'read-only' && policy.mode !== 'workspace-write') throw new Error('非法的受限运行模式');
@@ -281,7 +288,7 @@ export class VirtualSubprocessRuntime {
           if (nodeTask) {
             try {
               worker = createNodeScriptWorker({ args: argv.slice(1), cwd, roots,
-                workspaceRoots: [policy?.workspaceRoot ?? cwd], readOnly: policy?.mode === 'read-only', env: workerEnv,
+                workspaceRoots: [policy?.workspaceRoot ?? cwd], readOnly: policy?.mode === 'read-only', readOnlyRoots: this.readOnlyRoots, env: workerEnv,
                 stdin: typeof spec.stdio.stdin === 'object' ? spec.stdio.stdin.data : '',
                 streamStdin: spec.stdio.stdin === 'pipe' });
             } catch (error) {
@@ -315,7 +322,7 @@ export class VirtualSubprocessRuntime {
                 dshOhosVirtualProcess: { protocol: 1 },
                 ...(state.workspace ? { dshOhosWorkspaceGrants: { mounts: state.workspace.mounts } } : {}),
                 argv: [name, ...argv.slice(1)], cwd, policy,
-                roots, linuxCommands: linux?.commands ?? [],
+                roots, readOnlyRoots: this.readOnlyRoots, linuxCommands: linux?.commands ?? [],
                 env, stdin: typeof spec.stdio.stdin === 'object' ? spec.stdio.stdin.data : '',
               },
               env: workerEnv, stdout: true, stderr: true,

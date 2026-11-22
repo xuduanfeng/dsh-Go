@@ -5,6 +5,7 @@
 // 对话详情 「文件」 tab.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:dsh_client/dsh_client.dart';
@@ -13,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../share_code/share_codec.dart' show shareFileExtension;
 import '../../state/artifact_files.dart';
 import '../../state/artifacts.dart';
 import '../../state/workspace_state.dart';
@@ -28,6 +30,7 @@ import '../common/fade_in.dart';
 import '../common/list_page_row.dart';
 import '../features/feature_kit.dart' show QuietSpinner;
 import '../session/workspace_files.dart' show FilePreviewPage, formatBytes;
+import '../share_code/share_code_host.dart' show openShareFile;
 import '../settings/settings_widgets.dart' show SettingsTile;
 import '../theme/app_icons.dart';
 import '../theme/theme.dart';
@@ -185,8 +188,14 @@ class _WorkspaceBrowserState extends ConsumerState<WorkspaceBrowser> with Single
 
   void _openFile(String rel, int? bytes) {
     final root = ref.read(workspaceRootProvider(widget.sessionId));
+    final hostPath = workspaceHostPath(root, rel);
+    // A `.dshgo` file opens its replay (decode + 接着聊), not the text preview.
+    if (rel.toLowerCase().endsWith('.$shareFileExtension')) {
+      unawaited(openShareFile(context, File(hostPath)));
+      return;
+    }
     Navigator.of(context)
-        .push(FilePreviewPage.route(sessionId: widget.sessionId, path: workspaceHostPath(root, rel), bytes: bytes));
+        .push(FilePreviewPage.route(sessionId: widget.sessionId, path: hostPath, bytes: bytes));
   }
 
   Future<void> _fileMenu(String rel, int? bytes) async {
