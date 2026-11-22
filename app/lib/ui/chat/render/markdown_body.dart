@@ -8,7 +8,7 @@ import 'package:dsh_client/dsh_client.dart' show DshRemoteException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../share_code/share_code_host.dart' show openShareFile;
+import '../../share_code/share_code_host.dart' show openShareFile;
 import '../../../share_code/share_codec.dart' show shareFileExtension;
 import '../../../state/artifact_files.dart' show artifactFilesProvider;
 import 'package:gpt_markdown/gpt_markdown.dart';

@@ -16,7 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../media/gallery.dart' show imageProviderBytes;
-import '../../share_code/share_code_host.dart' show openShareFile;
+import '../share_code/share_code_host.dart' show openShareFile;
 import '../../share_code/share_codec.dart' show shareFileExtension;
 import '../../state/artifact_files.dart';
 import '../../state/artifacts.dart';
