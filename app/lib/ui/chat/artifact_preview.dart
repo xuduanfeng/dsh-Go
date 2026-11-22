@@ -16,6 +16,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../media/gallery.dart' show imageProviderBytes;
+import '../../share_code/share_code_host.dart' show openShareFile;
+import '../../share_code/share_codec.dart' show shareFileExtension;
 import '../../state/artifact_files.dart';
 import '../../state/artifacts.dart';
 import '../../state/image_snapshots.dart';
@@ -167,6 +169,13 @@ Future<void> runArtifactAction(
       return;
     }
     final files = ref.read(artifactFilesProvider);
+    // A `.dshgo` file opens its replay (decode + 接着聊), not the text preview
+    // and not the phone's app chooser.
+    if (target.path.toLowerCase().endsWith('.$shareFileExtension')) {
+      final file = await files.materialize(sessionId, target);
+      if (context.mounted) await openShareFile(context, file);
+      return;
+    }
     switch (action) {
       case ArtifactAction.open:
         await files.open(sessionId, target);

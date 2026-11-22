@@ -5,6 +5,7 @@
 // thumbnails, and the "generated files" card for turns without deliverables.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,8 @@ import '../../common/sheet_title_bar.dart';
 import '../../session/workspace_files.dart' show formatBytes;
 import '../../settings/settings_widgets.dart' show SettingsTile;
 import '../../share/share_entry.dart' show shareArtifact;
+import '../../share_code/share_code_host.dart' show openShareFile;
+import '../../../share_code/share_codec.dart' show shareFileExtension;
 import '../../theme/app_icons.dart';
 import '../../theme/theme.dart';
 import '../artifact_preview.dart';
@@ -183,10 +186,24 @@ class _ArtifactTileState extends ConsumerState<ArtifactTile> {
     });
   }
 
-  Future<void> _open({bool chooser = false}) => _run(_Busy.opening, (files) async {
-    await files.open(widget.sessionId, _artifact, chooser: chooser, onProgress: _onProgress);
+  bool get _isDshgo => _artifact.path.toLowerCase().endsWith('.$shareFileExtension');
+
+  /// A `.dshgo` file opens its replay (decode + 接着聊), not the text preview
+  /// and not the phone's app chooser.
+  Future<void> _openDshgo() => _run(_Busy.opening, (files) async {
+    final file = await files.materialize(widget.sessionId, _artifact, onProgress: _onProgress);
+    if (!mounted) return null;
+    await openShareFile(context, file);
     return null;
   });
+
+  Future<void> _open({bool chooser = false}) {
+    if (_isDshgo) return _openDshgo();
+    return _run(_Busy.opening, (files) async {
+      await files.open(widget.sessionId, _artifact, chooser: chooser, onProgress: _onProgress);
+      return null;
+    });
+  }
 
   Future<void> _save() => _run(_Busy.saving, (files) async {
     try {
@@ -203,6 +220,10 @@ class _ArtifactTileState extends ConsumerState<ArtifactTile> {
 
   void _tap() {
     final files = ref.read(artifactFilesProvider);
+    if (_isDshgo) {
+      unawaited(_openDshgo());
+      return;
+    }
     if (artifactPreviewable(_artifact, officeToPdf: files.canConvertOffice)) {
       Navigator.of(context).push(ArtifactPreviewPage.route(sessionId: widget.sessionId, artifact: _artifact));
     } else {
@@ -537,7 +558,11 @@ Future<ArtifactAction?> showArtifactMenu(
       final dsh = DshColors.of(sheet);
       final actions = [
         if (canFetch && artifactPreviewable(artifact, officeToPdf: officeToPdf)) ArtifactAction.preview,
-        if (canFetch) ...[ArtifactAction.open, ArtifactAction.openWith, ArtifactAction.share],
+        if (canFetch) ...[
+          ArtifactAction.open,
+          if (!artifact.path.toLowerCase().endsWith('.$shareFileExtension')) ArtifactAction.openWith,
+          ArtifactAction.share,
+        ],
         if (canFetch && !inDownloads) ArtifactAction.save,
         ArtifactAction.copyPath,
       ];

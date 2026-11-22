@@ -7,6 +7,10 @@ import 'dart:async';
 import 'package:dsh_client/dsh_client.dart' show DshRemoteException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../share_code/share_code_host.dart' show openShareFile;
+import '../../../share_code/share_codec.dart' show shareFileExtension;
+import '../../../state/artifact_files.dart' show artifactFilesProvider;
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -281,18 +285,32 @@ class MarkdownBody extends StatefulWidget {
   }
 
   static void _preview(BuildContext context, String sessionId, String path) {
-    Navigator.of(context).push(
-      ArtifactPreviewPage.route(
-        sessionId: sessionId,
-        artifact: Artifact(
-          path: path,
-          origin: ArtifactOrigin.linked,
-          turn: MarkdownImageScope.maybeOf(context)?.turn ?? 0,
-          snapshotImage:
-              MarkdownImageScope.maybeOf(context)?.turn != null && artifactKindOf(path) == ArtifactKind.image,
-        ),
-      ),
+    final artifact = Artifact(
+      path: path,
+      origin: ArtifactOrigin.linked,
+      turn: MarkdownImageScope.maybeOf(context)?.turn ?? 0,
+      snapshotImage:
+          MarkdownImageScope.maybeOf(context)?.turn != null && artifactKindOf(path) == ArtifactKind.image,
     );
+    // A `.dshgo` file opens its replay (decode + 接着聊), not the text preview.
+    if (path.toLowerCase().endsWith('.$shareFileExtension')) {
+      unawaited(_openDshgo(context, sessionId, artifact));
+      return;
+    }
+    Navigator.of(context).push(ArtifactPreviewPage.route(sessionId: sessionId, artifact: artifact));
+  }
+
+  /// A `.dshgo` file opens its replay (decode + 接着聊), not the text preview.
+  static Future<void> _openDshgo(BuildContext context, String sessionId, Artifact artifact) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    try {
+      final file = await container.read(artifactFilesProvider).materialize(sessionId, artifact);
+      if (context.mounted) await openShareFile(context, file);
+    } catch (_) {
+      if (context.mounted) {
+        await Navigator.of(context).push(ArtifactPreviewPage.route(sessionId: sessionId, artifact: artifact));
+      }
+    }
   }
 
   /// The workspace file at [path] when there is one (a folder by that name
