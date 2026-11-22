@@ -139,6 +139,7 @@ def main():
                     '--compiler', str(clang), f'--cxx-flag=-resource-dir={runtimes / "clang-resource"}',
                     f'--cxx-flag=-stdlib++-isystem{runtimes / "include/c++/v1"}', '--cxx-flag=-D__MUSL__=1',
                     f'--ld-flag=-L{runtimes / "lib"}', f'--ld-flag=--ld-path={sdk / "llvm/bin/ld.lld"}',
+                    '--ld-flag=-l:libc++.a', '--ld-flag=-l:libc++abi.a',
                     '--napi-rename-header', str(rename), '--libnode', str(output / 'libnode.so'),
                     '--libnode-build-json', str(built / 'build.json'), '--output', str(work / 'loader')], check=True)
     if args.workspace_grants:

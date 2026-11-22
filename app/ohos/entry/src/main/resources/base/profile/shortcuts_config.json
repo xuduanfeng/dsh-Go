@@ -6,7 +6,7 @@
       "icon": "$media:shortcut_new_chat",
       "wants": [
         {
-          "bundleName": "ccchimneyyy.dsh.go",
+          "bundleName": "com.xuduanfeng.dshgo",
           "moduleName": "entry",
           "abilityName": "EntryAbility",
           "parameters": {
@@ -21,7 +21,7 @@
       "icon": "$media:shortcut_voice",
       "wants": [
         {
-          "bundleName": "ccchimneyyy.dsh.go",
+          "bundleName": "com.xuduanfeng.dshgo",
           "moduleName": "entry",
           "abilityName": "EntryAbility",
           "parameters": {

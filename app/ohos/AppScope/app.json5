@@ -1,7 +1,7 @@
 {
   "app": {
-    "bundleName": "ccchimneyyy.dsh.go",
-    "vendor": "ccch1mneyyy",
+    "bundleName": "com.xuduanfeng.dshgo",
+    "vendor": "xuduanfeng",
     "versionCode": 1000000,
     "versionName": "1.0.0",
     "icon": "$media:layered_image",
