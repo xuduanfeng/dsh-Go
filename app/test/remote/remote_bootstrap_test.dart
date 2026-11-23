@@ -136,7 +136,7 @@ DSHAPP url dsh web: http://127.0.0.1:51234/?token=launch-tok
 
     test('shQuote survives quotes', () {
       expect(shQuote("a'b"), "'a'\\''b'");
-      expect(loginShell('echo hi'), "sh -lc 'echo hi'");
+      expect(loginShell('echo hi'), "printf '%s' ZWNobyBoaQ== | base64 -d | sh");
     });
 
     test('start script always binds loopback with an OS-picked port', () {

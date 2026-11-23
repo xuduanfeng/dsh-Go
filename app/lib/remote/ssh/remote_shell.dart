@@ -33,13 +33,15 @@ String redactRemoteTokens(String text) => text.replaceAll(RegExp(r'token=[^\s&#]
 /// Single-quotes [value] for POSIX sh.
 String shQuote(String value) => "'${value.replaceAll("'", r"'\''")}'";
 
-/// `sh -lc '<script>'`: works under bash, zsh, fish and busybox accounts alike.
+/// Transport for a POSIX `sh` script on the remote.
+///
+/// The script is base64-encoded and decoded on the far side: Windows OpenSSH
+/// with a Git Bash default shell mangles backslash continuations (and some
+/// quoting) when a multi-line script is passed as `sh -lc '<script>'`, so the
+/// payload must contain no quotes, backslashes or newlines at all.
 String loginShell(String script) {
-  // Unlike POSIX sh, fish interprets \\ and \' inside single quotes. Keep
-  // both backslashes and quotes outside quoted spans so the account shell
-  // passes the same script to sh, including its nested trap quoting.
-  final escaped = script.replaceAllMapped(RegExp(r"['\\]"), (match) => "'\\${match[0]}'");
-  return "sh -lc '$escaped'";
+  final encoded = base64.encode(utf8.encode(script));
+  return "printf '%s' $encoded | base64 -d | sh";
 }
 
 /// Runs scripts with the local `/bin/sh` (tests, and a "remote" that is this
