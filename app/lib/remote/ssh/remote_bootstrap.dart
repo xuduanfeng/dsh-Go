@@ -71,10 +71,18 @@ class RemoteProbe {
 /// * `web.cmd` — the launch command it was started with; a live instance with
 ///   another command requires an explicit restart.
 ///
-/// The server is started as `<command> --host 127.0.0.1 --port 0 --no-open`
+/// The server is started as `<command> --host 127.0.0.1 --port 48789 --no-open`
 /// under `nohup`, so it outlives the SSH session and is reused by the next
-/// connection. Port 0 lets the OS pick a free port; the real one is read from
-/// the launch line.
+/// connection.
+///
+/// The port is fixed on purpose: Windows OpenSSH hands a Git Bash default
+/// shell a native `node.exe`, and MSYS `kill -0`/`ps` cannot observe native
+/// process lifetimes, so the old pid check always reported "not running" and
+/// every SSH connection started another `--port 0` host. Duplicate hosts
+/// writing one session interleaved seq counters and corrupted its log.
+/// `ours` now falls back to probing the port from the launch line, and the
+/// fixed start port makes a stray second start fail with EADDRINUSE instead
+/// of silently forking a duplicate.
 class RemoteDshBootstrap {
   RemoteDshBootstrap(
     this.shell, {
@@ -164,8 +172,25 @@ _st() {
     ps -p "$1" -o lstart= 2>/dev/null
   fi
 }
+_port_up() {
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null || return 1
+  return 0
+}
+_managed_port() {
+  [ -f "$D/web.log" ] || return 1
+  L=$(grep -E 'https?://[^ ]*[?&]token=' "$D/web.log" 2>/dev/null | tail -n 1)
+  [ -n "$L" ] || return 1
+  printf '%s\n' "$(printf '%s' "$L" | sed -E 's#.*://[^:/]+:([0-9]+).*#\1#')"
+}
 ours() {
-  kill -0 "$1" 2>/dev/null || return 1
+  if ! kill -0 "$1" 2>/dev/null; then
+    # MSYS kill cannot see native Windows processes (node.exe), so fall back to
+    # probing the port in the launch line. Without this fallback every SSH
+    # connection judged the running host dead and started a duplicate one.
+    RP=$(_managed_port) || return 1
+    [ -n "$RP" ] && _port_up "$RP"
+    return $?
+  fi
   if [ -f "$D/web.st" ]; then
     A=$(_st "$1") || return 1
     B=$(cat "$D/web.st" 2>/dev/null) || return 1
@@ -174,7 +199,7 @@ ours() {
   fi
   A=$(ps -p "$1" -o args= 2>/dev/null) || return 1
   case "$A" in
-    *'--host 127.0.0.1 --port 0 --no-open'*) return 0;;
+    *'--host 127.0.0.1 --port'*) return 0;;
     *) return 1;;
   esac
 }
@@ -253,7 +278,7 @@ fi''');
       ..writeln(': > "\$D/web.log"')
       ..writeln('NO_COLOR=1; export NO_COLOR')
       ..writeln('N=""; if command -v nohup >/dev/null 2>&1; then N=nohup; fi')
-      ..writeln('\$N $launchCommand --host 127.0.0.1 --port 0 --no-open </dev/null >>"\$D/web.log" 2>&1 &')
+      ..writeln('\$N $launchCommand --host 127.0.0.1 --port 48789 --no-open </dev/null >>"\$D/web.log" 2>&1 &')
       ..writeln('P=\$!')
       ..writeln('_st "\$P" > "\$D/web.st"')
       ..writeln('printf \'%s\\n\' "\$P" > "\$D/web.pid"')
