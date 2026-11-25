@@ -177,10 +177,19 @@ _port_up() {
   return 0
 }
 _managed_port() {
-  [ -f "$D/web.log" ] || return 1
-  L=$(grep -E 'https?://[^ ]*[?&]token=' "$D/web.log" 2>/dev/null | tail -n 1)
-  [ -n "$L" ] || return 1
-  printf '%s\n' "$(printf '%s' "$L" | sed -E 's#.*://[^:/]+:([0-9]+).*#\1#')"
+  # `web.port` is written on every successful start and never cleared by a
+  # failed one, so a crashed attempt cannot hide the port of the live host.
+  for f in "$D/web.port" "$D/web.log" "$D/web.log.prev"; do
+    [ -f "$f" ] || continue
+    L=$(grep -E 'https?://[^ ]*[?&]token=' "$f" 2>/dev/null | tail -n 1)
+    [ -n "$L" ] || L=$(cat "$f" 2>/dev/null | tr -d '\r\n')
+    [ -n "$L" ] || continue
+    case "$L" in
+      *://*) printf '%s\n' "$(printf '%s' "$L" | sed -E 's#.*://[^:/]+:([0-9]+).*#\1#')"; return 0;;
+      [0-9]*) printf '%s\n' "$L"; return 0;;
+    esac
+  done
+  return 1
 }
 ours() {
   # The launch-line port is the only liveness signal that works for native
@@ -278,6 +287,7 @@ fi''');
     }
     b
       ..writeln('printf \'%s\' ${shQuote(launchCommand)} > "\$D/web.cmd"')
+      ..writeln('mv -f "\$D/web.log" "\$D/web.log.prev" 2>/dev/null || true')
       ..writeln(': > "\$D/web.log"')
       ..writeln('NO_COLOR=1; export NO_COLOR')
       ..writeln('N=""; if command -v nohup >/dev/null 2>&1; then N=nohup; fi')
@@ -289,7 +299,7 @@ fi''');
       ..writeln('i=0')
       ..writeln('while [ \$i -lt $seconds ]; do')
       ..writeln('  L=\$(grep -E \'https?://[^ ]*[?&]token=\' "\$D/web.log" 2>/dev/null | tail -n 1)')
-      ..writeln('  if [ -n "\$L" ]; then printf \'$_tag url %s\\n\' "\$L"; exit 0; fi')
+      ..writeln('  if [ -n "\$L" ]; then printf \'%s\\n\' "\$(printf \'%s\' "\$L" | sed -E \'s#.*://[^:/]+:([0-9]+).*#\\1#\')" > "\$D/web.port"; printf \'$_tag url %s\\n\' "\$L"; exit 0; fi')
       ..writeln('  if ! kill -0 "\$P" 2>/dev/null; then')
       ..writeln(
         '    printf \'$_tag exited\\n\'; tail -n 20 "\$D/web.log" 2>/dev/null | sed \'s/^/$_tag log /\'; exit 1',
