@@ -46,7 +46,7 @@ class RemoteDshEndpoint {
 
 /// What the probe found on the remote.
 class RemoteProbe {
-  const RemoteProbe({this.home, this.pid, this.sameCommand = false, this.launchLine});
+  const RemoteProbe({this.home, this.pid, this.sameCommand = false, this.launchLine, this.externalUrl});
 
   final String? home;
 
@@ -59,7 +59,16 @@ class RemoteProbe {
   /// Latest `dsh web: http://…?token=` line from its log.
   final String? launchLine;
 
+  /// A `dsh web` the user already runs on the remote (the desktop shell, or a
+  /// manual launch), discovered from `~/.dsh/logs/dsh-web.log`. Reusing it
+  /// keeps one host per session: when dsh-app starts a second host on another
+  /// port, whichever side resumes first compensates the other side's open turn
+  /// and the desktop UI shows "the task stopped".
+  final String? externalUrl;
+
   bool get reusable => pid != null && sameCommand && DshLaunchUrl.tryParse(launchLine ?? '') != null;
+
+  bool get hasExternal => DshLaunchUrl.tryParse(externalUrl ?? '') != null;
 }
 
 /// Finds or starts dsh-app's managed `dsh web` on the remote.
@@ -115,6 +124,16 @@ class RemoteDshBootstrap {
           port: url.baseUri.port,
           token: url.token,
           pid: probe.pid,
+          reused: true,
+          home: probe.home,
+        );
+      }
+      if (probe.hasExternal) {
+        final url = DshLaunchUrl.tryParse(probe.externalUrl!)!;
+        onDetail?.call(appL10n.remoteBootstrapReusePort(url.baseUri.port));
+        return RemoteDshEndpoint(
+          port: url.baseUri.port,
+          token: url.token,
           reused: true,
           home: probe.home,
         );
@@ -222,6 +241,16 @@ ours() {
   String probeScript() {
     return '${_prelude()}'
         'printf \'$_tag home %s\\n\' "\$HOME"\n'
+        'X=""\n'
+        'for f in "\$HOME/.dsh/logs/dsh-web.log"; do\n'
+        '  [ -f "\$f" ] || continue\n'
+        '  L=\$(grep -E \'https?://127\\.0\\.0\\.1:[0-9]+/[^ ]*[?&]token=\' "\$f" 2>/dev/null | tail -n 1)\n'
+        '  [ -n "\$L" ] && X="\$L"\n'
+        'done\n'
+        'if [ -n "\$X" ]; then\n'
+        '  P=\$(printf \'%s\' "\$X" | sed -E \'s#.*:([0-9]+)/.*#\\1#\')\n'
+        '  if [ -n "\$P" ] && _port_up "\$P"; then printf \'$_tag external %s\\n\' "\$X"; fi\n'
+        'fi\n'
         'if [ -f "\$D/web.pid" ]; then\n'
         '  P=\$(cat "\$D/web.pid" 2>/dev/null)\n'
         '  if [ -n "\$P" ] && ours "\$P"; then\n'
@@ -329,6 +358,7 @@ fi''');
     int? pid;
     var same = false;
     String? url;
+    String? external;
     for (final (key, value) in _tagged(stdout)) {
       switch (key) {
         case 'home':
@@ -339,9 +369,11 @@ fi''');
           same = true;
         case 'url':
           url = value.trim().isEmpty ? null : value.trim();
+        case 'external':
+          external = value.trim().isEmpty ? null : value.trim();
       }
     }
-    return RemoteProbe(home: home, pid: pid, sameCommand: same, launchLine: url);
+    return RemoteProbe(home: home, pid: pid, sameCommand: same, launchLine: url, externalUrl: external);
   }
 
   static RemoteDshEndpoint parseStart(
