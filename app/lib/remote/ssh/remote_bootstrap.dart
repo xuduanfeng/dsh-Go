@@ -117,6 +117,16 @@ class RemoteDshBootstrap {
   Future<RemoteDshEndpoint> ensureRunning({bool forceRestart = false, void Function(String)? onDetail}) async {
     if (!forceRestart) {
       final probe = await this.probe();
+      if (probe.hasExternal) {
+        final url = DshLaunchUrl.tryParse(probe.externalUrl!)!;
+        onDetail?.call(appL10n.remoteBootstrapReusePort(url.baseUri.port));
+        return RemoteDshEndpoint(
+          port: url.baseUri.port,
+          token: url.token,
+          reused: true,
+          home: probe.home,
+        );
+      }
       if (probe.reusable) {
         final url = DshLaunchUrl.tryParse(probe.launchLine!)!;
         onDetail?.call(appL10n.remoteBootstrapReusePort(url.baseUri.port));
@@ -124,16 +134,6 @@ class RemoteDshBootstrap {
           port: url.baseUri.port,
           token: url.token,
           pid: probe.pid,
-          reused: true,
-          home: probe.home,
-        );
-      }
-      if (probe.hasExternal) {
-        final url = DshLaunchUrl.tryParse(probe.externalUrl!)!;
-        onDetail?.call(appL10n.remoteBootstrapReusePort(url.baseUri.port));
-        return RemoteDshEndpoint(
-          port: url.baseUri.port,
-          token: url.token,
           reused: true,
           home: probe.home,
         );
@@ -244,7 +244,7 @@ ours() {
         'X=""\n'
         'for f in "\$HOME/.dsh/logs/dsh-web.log"; do\n'
         '  [ -f "\$f" ] || continue\n'
-        '  L=\$(grep -E \'https?://127\\.0\\.0\\.1:[0-9]+/[^ ]*[?&]token=\' "\$f" 2>/dev/null | tail -n 1)\n'
+        '  L=\$(grep -oE \'https?://127\\.0\\.0\\.1:[0-9]+/[^ ]*[?&]token=[^ ]*\' "\$f" 2>/dev/null | tail -n 1)\n'
         '  [ -n "\$L" ] && X="\$L"\n'
         'done\n'
         'if [ -n "\$X" ]; then\n'
@@ -256,7 +256,7 @@ ours() {
         '  if [ -n "\$P" ] && ours "\$P"; then\n'
         '    printf \'$_tag alive %s\\n\' "\$P"\n'
         '    if [ "\$(cat "\$D/web.cmd" 2>/dev/null)" = ${shQuote(launchCommand)} ]; then printf \'$_tag samecmd\\n\'; fi\n'
-        '    L=\$(grep -E \'https?://[^ ]*[?&]token=\' "\$D/web.log" 2>/dev/null | tail -n 1)\n'
+        '    L=\$(grep -oE \'https?://[^ ]*[?&]token=[^ ]*\' "\$D/web.log" 2>/dev/null | tail -n 1)\n'
         '    printf \'$_tag url %s\\n\' "\$L"\n'
         '  else\n'
         '    rm -f "\$D/web.pid"\n'
@@ -327,7 +327,7 @@ fi''');
       ..writeln('printf \'$_tag started %s\\n\' "\$P"')
       ..writeln('i=0')
       ..writeln('while [ \$i -lt $seconds ]; do')
-      ..writeln('  L=\$(grep -E \'https?://[^ ]*[?&]token=\' "\$D/web.log" 2>/dev/null | tail -n 1)')
+      ..writeln('  L=\$(grep -oE \'https?://[^ ]*[?&]token=[^ ]*\' "\$D/web.log" 2>/dev/null | tail -n 1)')
       ..writeln('  if [ -n "\$L" ]; then printf \'%s\\n\' "\$(printf \'%s\' "\$L" | sed -E \'s#.*://[^:/]+:([0-9]+).*#\\1#\')" > "\$D/web.port"; printf \'$_tag url %s\\n\' "\$L"; exit 0; fi')
       ..writeln('  if ! kill -0 "\$P" 2>/dev/null; then')
       ..writeln(
