@@ -1780,6 +1780,42 @@ class ChatController extends Notifier<ChatState> {
     }
   }
 
+  /// Carries our optimistic bubble for [from] over to [to]. A re-sent prompt
+  /// needs a fresh request id (the Host dedups ids for the session), while the
+  /// bubble must keep showing the same words and files.
+  PendingPrompt _readdress(String from, String to) {
+    PendingPrompt? carried;
+    for (final prompt in _pending) {
+      if (prompt.requestId == from) {
+        carried = prompt;
+        break;
+      }
+    }
+    _pending = List.unmodifiable([
+      for (final prompt in _pending)
+        if (prompt.requestId == from)
+          PendingPrompt(
+            requestId: to,
+            text: prompt.text,
+            time: prompt.time,
+            mode: prompt.mode,
+            attachments: prompt.attachments,
+            resendable: prompt.resendable,
+            sourceKind: prompt.sourceKind,
+            sourceForm: prompt.sourceForm,
+          )
+        else
+          prompt,
+    ]);
+    if (_withdrawn.remove(from)) _withdrawn.add(to);
+    final claimed = _claimedAt.remove(from);
+    if (claimed != null) _claimedAt[to] = claimed;
+    final moving = _moving.remove(from);
+    if (moving != null) _moving[to] = moving;
+    return carried ??
+        PendingPrompt(requestId: to, text: '', time: DateTime.now());
+  }
+
   /// Sends [prompts] again, in order, after [_takeOut]: each under its own
   /// request id (DSH dedups those against the inbox and the log only, so the
   /// echo still lands on its bubble), files staged anew (taking a prompt out
@@ -1789,31 +1825,37 @@ class ChatController extends Notifier<ChatState> {
   Future<List<PendingPrompt>> _putBack(_ChatOperation operation, List<PendingPrompt> prompts) async {
     final lost = <PendingPrompt>[];
     Object? failure;
-    for (final prompt in prompts) {
-      if (!_currentOperation(operation)) return _retireTaken([...lost, prompt]);
+    for (final original in prompts) {
+      if (!_currentOperation(operation)) return _retireTaken([...lost, original]);
+      // The Host dedups prompts by request id for the whole session: its
+      // hasPromptRequest never forgets one, so re-sending under the id we took
+      // out is answered with "accepted" and enqueues nothing. Send under a
+      // fresh id and carry the optimistic bubble over to it.
+      final requestId = _requestId();
+      final prompt = _readdress(original.requestId, requestId);
       try {
         await _deliver(
           operation,
           prompt.text,
           prompt.attachments,
           await _stageFiles(operation, prompt.attachments),
-          requestId: prompt.requestId,
+          requestId: requestId,
           mode: prompt.slot == InboxSlot.nextStep ? PromptMode.steer : PromptMode.queue,
         );
         if (!_currentOperation(operation)) return const [];
         // Back in the inbox: taking it out does not withdraw it.
-        _withdrawn.remove(prompt.requestId);
+        _withdrawn.remove(requestId);
       } catch (e) {
         if (!_currentOperation(operation)) return const [];
         // Its echo already came: it got there.
-        if (!_pending.any((p) => p.requestId == prompt.requestId)) continue;
+        if (!_pending.any((p) => p.requestId == requestId)) continue;
         lost.add(prompt);
         failure = e;
         if (_outcomeUnknown(e)) {
-          _unsettled = (content: _contentKey(prompt.text, prompt.attachments), requestId: prompt.requestId);
+          _unsettled = (content: _contentKey(prompt.text, prompt.attachments), requestId: requestId);
         }
       } finally {
-        if (_currentOperation(operation)) _finishMoving(operation, prompt.requestId);
+        if (_currentOperation(operation)) _finishMoving(operation, requestId);
       }
     }
     // Never return a retired Host's content into the replacement composer.
