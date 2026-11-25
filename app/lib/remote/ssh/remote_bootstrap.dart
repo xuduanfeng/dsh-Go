@@ -183,13 +183,16 @@ _managed_port() {
   printf '%s\n' "$(printf '%s' "$L" | sed -E 's#.*://[^:/]+:([0-9]+).*#\1#')"
 }
 ours() {
+  # The launch-line port is the only liveness signal that works for native
+  # Windows processes from Git Bash. Check it first: the pid file may hold a
+  # wrapper shell whose start time cannot be read back, and the old pid-first
+  # order then judged a healthy host dead and started a duplicate.
+  RP=$(_managed_port)
+  if [ -n "$RP" ] && _port_up "$RP"; then
+    return 0
+  fi
   if ! kill -0 "$1" 2>/dev/null; then
-    # MSYS kill cannot see native Windows processes (node.exe), so fall back to
-    # probing the port in the launch line. Without this fallback every SSH
-    # connection judged the running host dead and started a duplicate one.
-    RP=$(_managed_port) || return 1
-    [ -n "$RP" ] && _port_up "$RP"
-    return $?
+    return 1
   fi
   if [ -f "$D/web.st" ]; then
     A=$(_st "$1") || return 1
