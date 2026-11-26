@@ -18,6 +18,8 @@ const TRACKER = Symbol.for("cordis.tracker");
 const SCAN_MAX_AGE_MS = 2000;
 const CHANGED_DEBOUNCE_MS = 300;
 const SELF = "dsh-go-bridge";
+/** Registrations made by the bridge itself: no plugin context owns them. */
+const BUILTIN_TOKEN = Symbol("builtin");
 /** Registration kinds that own a data feed (see feed()). */
 const FEED_KINDS = new Set(["panels", "strips", "notes", "banners"]);
 const REG_NAMES = { panels: "panel", strips: "strip", notes: "turnNote", banners: "banner", handlers: "on", media: "media", micro: "micro", capability: "onCapability" };
@@ -55,7 +57,7 @@ function nearestPackage(moduleUrl, expected) {
 
 export class NativeCore {
   /** @param ctx the bridge's context; @param limits effective limits; @param logger optional */
-  constructor(ctx, limits, version) {
+  constructor(ctx, limits, version, builtins = []) {
     this.ctx = ctx;
     this.limits = limits;
     this.version = version;
@@ -73,7 +75,9 @@ export class NativeCore {
     this.changedTimer = undefined;
     this.contribMemo = new Map();
     this.buckets = new Map();        // pkg -> {tokens, at, inflight}
+    this.builtinPlugins = new Map(); // pkg -> pseudo record for a bridge-owned contribution
     this.service = this.#createService();
+    for (const entry of builtins) this.#addBuiltin(entry);
   }
 
   // ---------------------------------------------------------------- discovery
@@ -198,7 +202,18 @@ export class NativeCore {
   }
 
   plugin(pkg) {
-    return this.scan().plugins.get(pkg);
+    return this.scan().plugins.get(pkg) ?? this.builtinPlugins.get(pkg);
+  }
+
+  /** A contribution the bridge itself ships (parseManifest shape, no package on disk). */
+  #addBuiltin(entry) {
+    const parsed = parseManifest(entry?.pkgJson, undefined);
+    if (!parsed.valid) return;
+    const rec = { pkg: parsed.pkg, uid: `builtin:${parsed.pkg}`, stamp: "builtin", parsed, dir: undefined, pkgJsonPath: undefined };
+    this.builtinPlugins.set(parsed.pkg, rec);
+    for (const it of parsed.items["composer.banner"]) {
+      if (entry.banner?.id === it.id) this.#add(parsed.pkg, "banners", it.id, entry.banner, BUILTIN_TOKEN);
+    }
   }
 
   // ---------------------------------------------------------------- state
@@ -235,8 +250,9 @@ export class NativeCore {
     const key = `${s.fingerprint}:${this.regsVersion}:${this.healthVersion}:${s.graphRev}\0${caps.key}`;
     const hit = this.contribMemo.get(key);
     if (hit) return hit;
-    const plugins = [...s.plugins.values()].sort((a, b) => a.pkg.localeCompare(b.pkg))
-      .map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg)));
+    const plugins = [...this.builtinPlugins.values()].map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg)))
+      .concat([...s.plugins.values()].sort((a, b) => a.pkg.localeCompare(b.pkg))
+        .map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg))));
     const body = { v: PROTOCOL, bridge: this.version, bootRev: s.graphRev, limits: this.limits, plugins };
     const rev = shortHash(JSON.stringify(body));
     const out = { v: PROTOCOL, bridge: this.version, rev, bootRev: s.graphRev, limits: this.limits, plugins };
@@ -265,7 +281,7 @@ export class NativeCore {
       const first = this.lastBroadcast === undefined;
       this.lastBroadcast = stateKey;
       // Ending feeds of plugins that disappeared.
-      for (const feed of [...this.feeds.values()]) if (!s.plugins.has(feed.pkg)) feed.stop("not-found");
+      for (const feed of [...this.feeds.values()]) if (!s.plugins.has(feed.pkg) && !this.builtinPlugins.has(feed.pkg)) feed.stop("not-found");
       if (first && this.changedListeners.size === 0) return;
       for (const l of this.changedListeners) {
         try {

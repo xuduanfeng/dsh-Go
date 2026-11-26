@@ -111,7 +111,7 @@ test('old manifest/effect semantics and 4Hz budget remain unchanged', () => {
 test('declarations survive unnegotiated contributions; old welcome stays old', async t => {
   const f = await fixture(t); f.service.on('go', () => ({ type: 'audio', op: 'play', instance: 'a', src: 'media:clip' })); f.service.media('clip', () => ({ body: Buffer.from('audio'), contentType: 'audio/wav' }));
   const old = await f.ws(); assert.equal(old.welcome.features, undefined);
-  const row = (await (await f.request('contributions')).json()).plugins[0]; assert.deepEqual(row.capabilities, manifest.capabilities); assert.equal(row.contributes.media[0].id, 'clip');
+  const row = (await (await f.request('contributions')).json()).plugins.find((p) => p.pkg === 'voice-test'); assert.deepEqual(row.capabilities, manifest.capabilities); assert.equal(row.contributes.media[0].id, 'clip');
   assert.deepEqual((await f.invoke(old)).effects, []);
   const fresh = await f.ws(['audio', 'future']); assert.deepEqual(fresh.welcome.features, ['audio']); assert.ok((await f.invoke(fresh)).effects[0].lease);
 });
@@ -241,7 +241,7 @@ test('v1.1 plugins are untouched: undeclared capability effects and keys keep th
   f.service.on('go', () => [{ toast: 'hi' }, e]);
   const w = await f.ws(['audio']); const r = await f.invoke(w);
   assert.deepEqual(r.effects, [{ type: 'toast', text: 'hi' }]); assert.equal(r.issues[0].code, 'unknown-effect');
-  const row = (await (await f.request('contributions?features=audio')).json()).plugins[0];
+  const row = (await (await f.request('contributions?features=audio')).json()).plugins.find((p) => p.pkg === 'voice-test');
   assert.equal(row.capabilities, undefined); assert.deepEqual(Object.keys(row.contributes), ['composer.actions', 'message.actions', 'composer.strip', 'panels']);
 });
 
@@ -250,7 +250,7 @@ test('declared but not negotiated: dropped without a violation, the plugin is ne
   f.service.on('go', () => ({ type: 'audio', op: 'play', instance: 'a', src: 'media:clip' }));
   const old = await f.ws();
   for (let i = 0; i < 7; i++) { const r = await f.invoke(old); assert.equal(r.status, 200); assert.deepEqual(r.effects, []); assert.equal(r.issues[0].code, 'unknown-effect'); await delay(260); }
-  const row = (await (await f.request('contributions')).json()).plugins[0]; assert.equal(row.state, 'ok');
+  const row = (await (await f.request('contributions')).json()).plugins.find((p) => p.pkg === 'voice-test'); assert.equal(row.state, 'ok');
 });
 
 test('new tap after speechStart rotates the whole owner, restores media and rejects old terminal', async t => {

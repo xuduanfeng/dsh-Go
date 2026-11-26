@@ -68,7 +68,7 @@ for (const sample of [
   assert.deepEqual(JSON.parse(r.body.view.text), { panels: sample.panels, text: sample.text, plugin: sample.plugin ?? false, image: sample.image ?? (sample.components === undefined) });
   const c = await f.get(sample.query, 'contributions');
   assert.equal(c.status, 200);
-  assert.deepEqual(c.body.plugins[0].contributes.panels[0].placement, [sample.plugin ? 'plugin' : 'session.tab']);
+  assert.deepEqual(c.body.plugins.find((p) => p.contributes.panels?.length).contributes.panels[0].placement, [sample.plugin ? 'plugin' : 'session.tab']);
 });
 
 test('omitted lists do not bypass incompatible protocol rejection', async t => {
