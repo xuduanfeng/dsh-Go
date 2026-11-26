@@ -87,6 +87,7 @@ App                                   dsh-go-bridge（宿主）                 
 | `composer.actions` | 输入框上方胶囊行（与 ui.json `quickActions` 合并；ui.json 的排序、隐藏优先；总计显示 ≤ 8 个由 App 管） | `id`、`label`（必填）、`icon`、`effect` | 2 | `label` ≤ 10 |
 | `message.actions` | 助手消息长按菜单，按插件分组，组名 = 插件 `title` | `id`、`label`（必填）、`icon`、`effect` | 2 | `label` ≤ 12 |
 | `composer.strip` | 输入框上方一行（与活动条互斥，生成中让位；多插件轮流，同时 1 条，App 管） | `id`、`icon`、`text`（静态兜底）、`panel` | 1 | `text` ≤ 24 |
+| `composer.banner` | 输入框上方的两行卡片（在状态条之上）；生成回复时让位；同时只显示 1 张（App 管） | `id`、`icon` | 1 | `text` ≤ 120、`note` ≤ 90、按钮 `label` ≤ 8 |
 | `panels` | 对话详情页「插件」页签、全部功能、聊天页面板 | `id`、`title`（必填）、`icon`、`placement`、`view` | 4 | `title` ≤ 16 |
 
 条目字段说明：
@@ -401,7 +402,7 @@ HTTP 错误（守卫的 401/403/503 除外）的正文：
   "v": 1,
   "pkg": "dsh-go-example-quick",
   "id": "translate",                  // 贡献 id（面板点按时是面板 id）
-  "surface": "composer.actions",      // composer.actions | message.actions | composer.tools | session.actions | composer.strip | panel
+  "surface": "composer.actions",      // composer.actions | message.actions | composer.tools | session.actions | composer.strip | composer.banner | panel
   "action": "refresh",                // 仅 panel：视图里按钮 / options / confirm 的 action 名（1–64 字符）
   "value": "b",                       // 仅 panel：options 选中的值等，任意 JSON，≤ 4 KiB
   "scope": { "sessionId": "…" },
@@ -445,6 +446,30 @@ HTTP 错误（守卫的 401/403/503 除外）的正文：
 | `tone` | `good` \| `warn` \| `bad` \| `info` \| `muted`，缺省 `muted` |
 
 桥接在发出前截断 `text`、丢弃其他字段。订阅方式与面板相同（`sub {pkg, id: <strip id>, scope: {sessionId}}`），没有视图，不需要 GET：App 直接画 `icon` + `text`（v1 状态条不走组件树，视图 schema 的 `strip` 预算档留给以后）。
+
+### 4.5.1 提示卡数据（`composer.banner`）
+
+`banner(id, { data, actions? })` 的 `emit` 形状：
+
+```json
+{
+  "text": "本会话上下文 ≈ 105k token · 刚刚还在用 · 若缓存失效约 0.11 元",
+  "note": "新开约 <0.01 元 · 空闲价",
+  "icon": "wallet",
+  "tone": "warn",
+  "actions": [{ "id": "open", "label": "新开会话" }, { "id": "dismiss", "label": "知道了" }]
+}
+```
+
+| 字段 | 规则 |
+|---|---|
+| `text` | 必填，≤ 120 字；空白 = 这张卡不存在（`undefined`，记违规） |
+| `note` | 可选第二行，≤ 90 字 |
+| `icon` | IconName，覆盖清单里的 `icon` |
+| `tone` | `good` \| `warn` \| `bad` \| `info` \| `muted`，决定强调色 |
+| `actions` | ≤ 2 个按钮，`id` 匹配 ID 正则，`label` ≤ 8 字；坏条目直接丢弃、不占名额 |
+
+`emit(null)` = 收起卡片。按钮点按走 invoke：`POST /dsh-go/v1/invoke {"surface":"composer.banner","id":"<banner id>","action":"<action id>","scope":{...}}`，返回的 effects 与面板按钮同义（常见的是 `{ "type": "command", "name": "new" }`）。`scope` 必须带 `sessionId`，否则 `end(not-found)`。
 
 ### 4.6 `GET /dsh-go/v1/assets/<pkg>/<path>`（可选）
 

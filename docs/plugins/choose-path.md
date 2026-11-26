@@ -35,6 +35,7 @@
 | 对某条回复做事 | `message.actions` 消息菜单 |
 | 对整段对话做事：导出、归档 | `session.actions` 对话操作 |
 | 一直看得见的一个数字 | `composer.strip` 状态条 |
+| 一句要人做决定的话 + 按钮（新开会话、确认） | `composer.banner` 提示卡 |
 | 每轮一眼看到的数字：花费、命中率 | `turn.note` 回合尾注 |
 | 一页信息或表单 | `panels` 面板 |
 | 插件自己的状态页 | 面板 `placement: "plugin"` |

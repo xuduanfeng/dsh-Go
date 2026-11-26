@@ -7,6 +7,7 @@ Beyond tool cards, a plugin can appear in four native places in dsh-go. The plac
 | `composer.actions` | The capsule row above the composer, shared with the person's ui.json capsules | `id`, `label`, `icon?`, `effect?` | 2 | `label` 10 | `effect` → the app runs it; otherwise invoke `on(id)` |
 | `message.actions` | A reply's long-press menu, grouped per plugin under its `title` | same | 2 | `label` 12 | same |
 | `composer.strip` | One line above the composer; steps aside while replying; plugins take turns | `id`, `icon?`, `text?`, `panel?` | 1 | `text` 24 | `panel` → opens it; otherwise invoke `on(id)` |
+| `composer.banner` | A two-line card above the composer (over the status line); steps aside while replying | `id`, `icon?` | 1 | `text` 120, `note` 90, button `label` 8 | A button → invoke `{surface:"composer.banner", action}` |
 | `panels` | Chat details › Plugins, All features, the chat panel | `id`, `title`, `icon?`, `placement?`, `view?` | 4 | `title` 16 | Buttons, rows, options in the view → invoke |
 
 Tool cards (`presentationMeta`) take no slot and need no manifest: see the [Quick start](quickstart.md).

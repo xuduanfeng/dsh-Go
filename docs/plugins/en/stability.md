@@ -29,6 +29,7 @@ The bridge enforces every number here.
 | `composer.actions` capsules | 2 | 10 characters |
 | `message.actions` message menu | 2 | 12 characters |
 | `composer.strip` status line | 1 | 24 characters |
+| `composer.banner` card | 1 (one card on screen at a time) | Text 120, second line 90, button label 8, 2 buttons |
 | `panels` | 4 | Title 16 characters |
 | `composer.tools` plus panel tools | 2 (the panel shows at most 8) | 8 characters |
 | `session.actions` chat actions | 2 | 12 characters |

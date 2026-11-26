@@ -29,6 +29,7 @@
 | `composer.actions` 胶囊 | 2 | 10 字 |
 | `message.actions` 消息菜单 | 2 | 12 字 |
 | `composer.strip` 状态条 | 1 | 24 字 |
+| `composer.banner` 提示卡 | 1（同时只显示 1 张） | 正文 120 字、第二行 90 字、按钮 8 字、按钮 2 个 |
 | `panels` 面板 | 4 | 标题 16 字 |
 | `composer.tools` 加号面板工具 | 2（整个面板最多显示 8 个） | 8 字 |
 | `session.actions` 对话操作 | 2 | 12 字 |

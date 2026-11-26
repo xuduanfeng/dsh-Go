@@ -7,6 +7,7 @@
 | `composer.actions` | 输入框上方的胶囊行，和用户在 ui.json 里写的胶囊同一行 | `id`、`label`、`icon?`、`effect?` | 2 | `label` 10 字 | 有 `effect` → App 直接执行；没有 → invoke `on(id)` |
 | `message.actions` | 助手消息长按菜单，按插件分组，组名是插件 `title` | 同上 | 2 | `label` 12 字 | 同上 |
 | `composer.strip` | 输入框上方一行；生成回复时让位；多个插件轮流 | `id`、`icon?`、`text?`、`panel?` | 1 | `text` 24 字 | 有 `panel` → 打开它；否则 invoke `on(id)` |
+| `composer.banner` | 输入框上方的两行卡片（状态条之上），生成回复时让位 | `id`、`icon?` | 1 | `text` 120 字、`note` 90 字、按钮 8 字 | 卡片按钮 → invoke `{surface:"composer.banner", action}` |
 | `panels` | 对话详情页「插件」页签、全部功能、聊天页面板 | `id`、`title`、`icon?`、`placement?`、`view?` | 4 | `title` 16 字 | 视图里的按钮、行、选项 → invoke |
 
 工具卡（`presentationMeta`）不占插槽，不需要清单，见[快速开始](quickstart.md)。
