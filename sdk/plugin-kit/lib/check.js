@@ -149,7 +149,7 @@ export function checkManifest(pkgJson, options = {}) {
     const r = bridgeCheckManifest(pkgJson, dir, {
       locale,
       app: options.app,
-      ...(regs === undefined ? { handlers: 'assume' } : { handlers: [...regs.handlers, ...regs.panels], panels: regs.panels, strips: regs.strips, notes: regs.notes, dataPanels: regs.dataPanels }),
+      ...(regs === undefined ? { handlers: 'assume' } : { handlers: [...regs.handlers, ...regs.panels], panels: regs.panels, strips: regs.strips, notes: regs.notes, banners: regs.banners, dataPanels: regs.dataPanels }),
     })
     first ??= r
     for (const i of r.issues) {

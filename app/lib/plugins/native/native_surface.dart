@@ -28,7 +28,8 @@ class NativeSurfaceKey {
 
   final String package;
 
-  /// [NativeSurface.composerStrip], [NativeSurface.panel] or [NativeSurface.turnNote].
+  /// [NativeSurface.composerStrip], [NativeSurface.composerBanner],
+  /// [NativeSurface.panel] or [NativeSurface.turnNote].
   final NativeSurface surface;
   final String id;
   final DshGoScope scope;
@@ -175,6 +176,7 @@ class NativeSurfaceController extends Notifier<NativeSurfaceState> {
         return switch (key.surface) {
           NativeSurface.panel => plugin.panels.any((panel) => panel.id == key.id),
           NativeSurface.turnNote => plugin.turnNotes.contains(key.id),
+          NativeSurface.composerBanner => plugin.banners.any((banner) => banner.id == key.id),
           _ => plugin.strips.any((strip) => strip.id == key.id),
         };
       }),

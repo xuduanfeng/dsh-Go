@@ -346,6 +346,7 @@ export function createTestHost(options = {}) {
         panels: [...regs.panels.keys()],
         strips: [...regs.strips.keys()],
         notes: [...regs.notes.keys()],
+        banners: [...regs.banners.keys()],
         handlers: [...regs.handlers.keys()],
         dataPanels: [...regs.panels].filter(([, r]) => typeof r.data === 'function').map(([id]) => id),
       }

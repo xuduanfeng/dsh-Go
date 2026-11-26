@@ -37,6 +37,7 @@ IconData _surfaceIcon(NativeSurface surface) => switch (surface) {
   NativeSurface.composerTools => AppIcons.add,
   NativeSurface.sessionActions => AppIcons.more,
   NativeSurface.turnNote => AppIcons.info,
+  NativeSurface.composerBanner => AppIcons.info,
 };
 
 /// The packages a bundle's native parts can sit in: its own, and each component's.
