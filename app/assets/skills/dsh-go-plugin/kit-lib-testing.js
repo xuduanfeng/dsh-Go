@@ -20,7 +20,7 @@ import { parseManifest, renderPlugin } from './bridge/manifest.js'
 import { chars, cleanLine, isPlainObject, sanitizeNotes, toJson, truncateChars, viewStats, withoutNulls } from './bridge/util.js'
 
 const CONTEXT_FOR = { 'composer.actions': ['draft', 'clipboard'], 'composer.tools': ['draft', 'clipboard'], 'message.actions': ['message'] }
-const SURFACE_OF = { 'composer.actions': 'composer.actions', 'message.actions': 'message.actions', 'composer.strip': 'composer.strip', panel: 'panels', 'composer.tools': 'composer.tools', 'session.actions': 'session.actions' }
+const SURFACE_OF = { 'composer.actions': 'composer.actions', 'message.actions': 'message.actions', 'composer.strip': 'composer.strip', panel: 'panels', 'composer.tools': 'composer.tools', 'session.actions': 'session.actions', 'composer.banner': 'composer.banner' }
 
 /** The caps an up-to-date app sends (protocol §3.1). */
 export function defaultCaps(overrides = {}) {
@@ -28,7 +28,7 @@ export function defaultCaps(overrides = {}) {
     protocol: PROTOCOL,
     app: '99.0.0',
     locale: 'zh-CN',
-    surfaces: ['composer.actions', 'message.actions', 'composer.strip', 'panels', 'composer.tools', 'session.actions', 'turn.note', 'plugin'],
+    surfaces: ['composer.actions', 'message.actions', 'composer.strip', 'panels', 'composer.tools', 'session.actions', 'turn.note', 'composer.banner', 'plugin'],
     components: JSON.parse(readFileSync(new URL('../schema/view.schema.json', import.meta.url), 'utf8')).$defs.node.properties.type.enum,
     ...overrides,
   }
@@ -41,6 +41,32 @@ function stripValue(d) {
   const out = { text: text === '' ? null : chars(text) > LIMITS.textChars.stripText ? truncateChars(text, LIMITS.textChars.stripText) : text }
   if (typeof d.icon === 'string' && ICON.test(d.icon)) out.icon = d.icon
   if (TONES.includes(d.tone)) out.tone = d.tone
+  return out
+}
+
+function bannerValue(d) {
+  if (d === null) return null
+  if (!isPlainObject(d) || typeof d.text !== 'string') return undefined
+  const text = cleanLine(d.text)
+  if (text === '') return undefined
+  const out = { text: chars(text) > LIMITS.textChars.bannerText ? truncateChars(text, LIMITS.textChars.bannerText) : text }
+  if (typeof d.note === 'string') {
+    const note = cleanLine(d.note)
+    if (note !== '') out.note = chars(note) > LIMITS.textChars.bannerNote ? truncateChars(note, LIMITS.textChars.bannerNote) : note
+  }
+  if (typeof d.icon === 'string' && ICON.test(d.icon)) out.icon = d.icon
+  if (TONES.includes(d.tone)) out.tone = d.tone
+  if (Array.isArray(d.actions)) {
+    const actions = []
+    for (const a of d.actions) {
+      if (actions.length >= LIMITS.bannerActions) break
+      if (!isPlainObject(a) || typeof a.id !== 'string' || !ID.test(a.id) || typeof a.label !== 'string') continue
+      const label = cleanLine(a.label)
+      if (label === '') continue
+      actions.push({ id: a.id, label: chars(label) > LIMITS.textChars.bannerAction ? truncateChars(label, LIMITS.textChars.bannerAction) : label })
+    }
+    if (actions.length > 0) out.actions = actions
+  }
   return out
 }
 
@@ -80,15 +106,15 @@ export function createTestHost(options = {}) {
   const logs = []
   const pending = []
   const runtimeIssues = new Map()
-  const regs = { panels: new Map(), strips: new Map(), notes: new Map(), handlers: new Map(), media: new Map(), micro: new Map(), capability: new Map() }
+  const regs = { panels: new Map(), strips: new Map(), notes: new Map(), banners: new Map(), handlers: new Map(), media: new Map(), micro: new Map(), capability: new Map() }
   const feeds = new Set()
   const violations = []
 
   const undeclared = (kind, id) => {
     const declared = parsed.ids.get(id)
-    const ok = kind === 'media' || kind === 'micro' ? declared === kind : kind === 'handlers' ? declared !== undefined : kind === 'panels' ? declared === 'panels' : kind === 'notes' ? declared === 'turn.note' : declared === 'composer.strip'
+    const ok = kind === 'media' || kind === 'micro' ? declared === kind : kind === 'handlers' ? declared !== undefined : kind === 'panels' ? declared === 'panels' : kind === 'notes' ? declared === 'turn.note' : kind === 'banners' ? declared === 'composer.banner' : declared === 'composer.strip'
     if (!ok) {
-      const name = { panels: 'panel', strips: 'strip', notes: 'turnNote', handlers: 'on' }[kind]
+      const name = { panels: 'panel', strips: 'strip', notes: 'turnNote', banners: 'banner', handlers: 'on' }[kind]
       runtimeIssues.set(`undeclared:${kind}:${id}`, { path: `/runtime/${id}`, code: 'undeclared', severity: 'warn', message: `${name}("${id}") is not declared in dshGo.contributes; ignored` })
     }
   }
@@ -131,6 +157,16 @@ export function createTestHost(options = {}) {
       if (typeof data !== 'function') throw new TypeError('dshGo.turnNote: pass (scope, emit) => cancel or { data }')
       const dispose = addFeedSource(regs.notes, id, { data })
       undeclared('notes', id)
+      return dispose
+    },
+    banner(id, def) {
+      if (typeof id !== 'string' || !ID.test(id)) throw new TypeError(`dshGo.banner: id must match ${ID}`)
+      const data = typeof def === 'function' ? def : def?.data
+      if (typeof data !== 'function') throw new TypeError('dshGo.banner: pass (scope, emit) => cancel or { data }')
+      const actions = def?.actions
+      if (def !== undefined && typeof def !== 'function' && actions !== undefined && (!isPlainObject(actions) || Object.values(actions).some((f) => typeof f !== 'function'))) throw new TypeError('dshGo.banner: actions must map names to functions')
+      const dispose = addFeedSource(regs.banners, id, { data, actions })
+      undeclared('banners', id)
       return dispose
     },
     strip(id, def) {
@@ -220,6 +256,7 @@ export function createTestHost(options = {}) {
       panels: new Map([...regs.panels].map(([id, r]) => [id, { data: typeof r.data === 'function' }])),
       strips: new Set(regs.strips.keys()),
       notes: new Set(regs.notes.keys()),
+      banners: new Set(regs.banners.keys()),
       handlers: new Set(regs.handlers.keys()),
       degraded: false,
       runtimeIssues: [...runtimeIssues.values()],
@@ -229,7 +266,7 @@ export function createTestHost(options = {}) {
   const surfaceItem = (surface, id) => parsed.items[SURFACE_OF[surface]]?.find((x) => x.id === id)
 
   function findSurface(id) {
-    for (const surface of ['composer.actions', 'message.actions', 'composer.strip', 'composer.tools', 'session.actions']) if (surfaceItem(surface, id)) return surface
+    for (const surface of ['composer.actions', 'message.actions', 'composer.strip', 'composer.tools', 'session.actions', 'composer.banner']) if (surfaceItem(surface, id)) return surface
     if (surfaceItem('panel', id)) return 'panel'
     return undefined
   }
@@ -331,6 +368,7 @@ export function createTestHost(options = {}) {
       if (item.effect !== undefined) throw new HostError(409, 'no-handler', `${id} has a static effect; the app runs it without invoke`)
       let fn
       if (surface === 'panel' && request.action !== undefined) fn = regs.panels.get(id)?.actions?.[request.action]
+      if (surface === 'composer.banner' && request.action !== undefined) fn = regs.banners.get(id)?.actions?.[request.action]
       fn ??= regs.handlers.get(id)
       if (typeof fn !== 'function') throw new HostError(409, 'no-handler', `no handler for ${id}${request.action ? `/${request.action}` : ''}`)
       const arg = { ...(request.scope ?? {}) }
@@ -413,7 +451,7 @@ export function createTestHost(options = {}) {
     subscribe(id, scope = {}) {
       // As the bridge does: the manifest says what this id is, whatever else is registered under it.
       const kind = parsed.ids.get(id)
-      const reg = { 'composer.strip': regs.strips, 'turn.note': regs.notes, panels: regs.panels }[kind]?.get(id)
+      const reg = { 'composer.strip': regs.strips, 'turn.note': regs.notes, 'composer.banner': regs.banners, panels: regs.panels }[kind]?.get(id)
       const dataFn = reg?.data
       let stopped = false
       let cancel
@@ -440,6 +478,9 @@ export function createTestHost(options = {}) {
         } else if (kind === 'turn.note') {
           value = sanitizeNotes(d)
           if (value === undefined) return feed.errors.push(`turnNote(${id}) emitted a non-object`)
+        } else if (kind === 'composer.banner') {
+          value = bannerValue(d)
+          if (value === undefined) return feed.errors.push(`banner(${id}) emitted a malformed card`)
         } else {
           if (d !== null && !isPlainObject(d)) return feed.errors.push(`data(${id}) emitted a non-object`)
           const json = toJson(d)

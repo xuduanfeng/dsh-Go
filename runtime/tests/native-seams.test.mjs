@@ -151,6 +151,54 @@ test("core: a turn note feed cuts text, drops junk and keeps the newest turns", 
   core.dispose();
 });
 
+test("composer.banner: one card a plugin, ready only with a banner() registration", () => {
+  const off = check("banner", { "composer.banner": [{ id: "cost", icon: "sparkles" }] }, { handlers: [] });
+  assert.deepEqual(off.plugin.contributes["composer.banner"], [{ id: "cost", icon: "sparkles", ready: false, live: false }]);
+  assert.ok(codes(off.issues).includes("no-handler@/dshGo/contributes/composer.banner/0"));
+  const on = check("banner-on", { "composer.banner": [{ id: "cost", icon: "sparkles" }] }, { handlers: [], banners: ["cost"] });
+  assert.deepEqual(on.plugin.contributes["composer.banner"], [{ id: "cost", icon: "sparkles", ready: true, live: true }]);
+  const two = check("banner-two", { "composer.banner": [{ id: "a" }, { id: "b" }] });
+  assert.equal(two.plugin.contributes["composer.banner"].length, 1, "one card a plugin");
+  assert.ok(codes(two.issues).includes("too-many@/dshGo/contributes/composer.banner/1"));
+});
+
+test("core: a banner feed cuts the two lines and the buttons", async (t) => {
+  const alive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(alive));
+  const a = pkgDir("banner-feed", { v: 1, contributes: { "composer.banner": [{ id: "cost" }] } });
+  const host = fakeHost([a]);
+  const core = new NativeCore(host.ctx, LIMITS, "test");
+  let emit;
+  core.service.banner.call({ ctx: host.callerOf(host.entries[0]) }, "cost", {
+    data: (scope, e) => {
+      emit = e;
+      e({
+        text: `  本会话上下文 ${"x".repeat(140)}  `,
+        note: "若缓存失效约 0.11 元".repeat(20),
+        icon: "sparkles",
+        tone: "warn",
+        actions: [{ id: "dismiss", label: "知道了" }, { id: "!bad", label: "x" }, { id: "open", label: "新开会话" }, { id: "extra", label: "多" }],
+      });
+      return () => {};
+    },
+    actions: { open: () => [{ type: "command", name: "new" }] },
+  });
+  const feed = core.feed("banner-feed", "cost", "banner", util.normalizeScope({ sessionId: "s" }));
+  await feed.waitFirst(500);
+  assert.equal(util.chars(feed.data.text), LIMITS.textChars.bannerText);
+  assert.ok(feed.data.text.startsWith("本会话上下文"));
+  assert.equal(util.chars(feed.data.note), LIMITS.textChars.bannerNote);
+  assert.equal(feed.data.tone, "warn");
+  assert.equal(feed.data.icon, "sparkles");
+  assert.deepEqual(feed.data.actions.map((x) => x.id), ["dismiss", "open"], "a malformed button spends no slot");
+  emit(null);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(feed.data, null, "null hides the card");
+  emit("nonsense");
+  assert.equal(core.health.get("banner-feed").consecutive, 1, "a violation");
+  core.dispose();
+});
+
 test("core: turnNote on an id declared elsewhere is reported", () => {
   const a = pkgDir("note-wrong", { v: 1, contributes: { panels: [{ id: "p", title: "P" }] } });
   const host = fakeHost([a]);

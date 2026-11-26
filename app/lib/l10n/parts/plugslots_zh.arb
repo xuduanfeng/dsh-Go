@@ -6,6 +6,7 @@
   "plugslotsSurfaceMessageActions": "消息菜单",
   "plugslotsSurfaceComposerStrip": "状态条",
   "plugslotsSurfacePanel": "面板",
+  "plugslotsSurfaceComposerBanner": "提示卡",
   "plugslotsNativeUi": "原生界面",
   "plugslotsIssueCount": "{count} 项有误",
   "@plugslotsIssueCount": {

@@ -399,6 +399,15 @@ final nativeStripsProvider = Provider<List<NativeStrip>>((ref) {
   ];
 });
 
+/// Cards above the composer, switched-on ones, in plugin order: the first one shows.
+final nativeBannersProvider = Provider<List<NativeBanner>>((ref) {
+  final plugins = ref.watch(nativeContributionsProvider).plugins;
+  return [
+    for (final p in plugins)
+      if (ref.watch(nativeSurfaceOnProvider((p.package, NativeSurface.composerBanner)))) ...p.banners,
+  ].take(NativeLimits.bannersTotal).toList();
+});
+
 /// The ＋ panel's tools, switched-on ones, every plugin's, up to what the panel holds.
 final nativeComposerToolsProvider = Provider<List<NativeAction>>((ref) {
   final plugins = ref.watch(nativeContributionsProvider).plugins;

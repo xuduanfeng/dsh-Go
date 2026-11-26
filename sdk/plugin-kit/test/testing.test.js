@@ -163,6 +163,42 @@ test('turn notes come out as the bridge cleans them', () => {
   assert.deepEqual(host.subscribe('cost', { sessionId: 's' }).data, { 1: { text: '一 二 三' } })
 })
 
+test('banners come out as the bridge cleans them, and their buttons invoke', async () => {
+  const host = createTestHost({ pkg: pkg({ v: 1, contributes: { 'composer.banner': [{ id: 'cost', icon: 'sparkles' }] } }), dir: '/nonexistent' })
+  host.ctx.inject(['dshGo'], (ctx) => {
+    ctx.dshGo.banner('cost', {
+      data: (_s, emit) => {
+        emit({
+          text: '  本会话上下文 ≈ 105k token  ',
+          note: '若缓存失效约 0.11 元',
+          icon: 'sparkles',
+          tone: 'warn',
+          actions: [{ id: 'dismiss', label: '知道了' }, { id: '!bad', label: 'x' }, { id: 'open', label: '新开会话新开会话' }, { id: 'third', label: '多' }],
+        })
+        return () => {}
+      },
+      actions: { open: () => [{ type: 'command', name: 'new' }] },
+    })
+  })
+  const row = host.contributions()
+  assert.deepEqual(row.contributes['composer.banner'], [{ id: 'cost', icon: 'sparkles', ready: true, live: true }])
+  assert.deepEqual(host.subscribe('cost', { sessionId: 's' }).data, {
+    text: '本会话上下文 ≈ 105k token',
+    note: '若缓存失效约 0.11 元',
+    icon: 'sparkles',
+    tone: 'warn',
+    actions: [{ id: 'dismiss', label: '知道了' }, { id: 'open', label: '新开会话新开会话' }],
+  })
+  assert.deepEqual((await host.invoke('cost', { action: 'open' })).effects, [{ type: 'command', name: 'new' }])
+})
+
+test('banners absent a registration stay unready', () => {
+  const host = createTestHost({ pkg: pkg({ v: 1, contributes: { 'composer.banner': [{ id: 'cost' }] } }), dir: '/nonexistent' })
+  const row = host.contributions()
+  assert.deepEqual(row.contributes['composer.banner'], [{ id: 'cost', ready: false, live: false }])
+  assert.ok(row.issues.some((i) => i.message.includes('has no banner("cost") registration')))
+})
+
 test('subscribe goes by what the manifest says an id is', () => {
   const host = createTestHost({ pkg: pkg({ v: 1, contributes: { panels: [{ id: 'main', title: '面板' }] } }), dir: '/nonexistent' })
   host.ctx.inject(['dshGo'], (ctx) => {

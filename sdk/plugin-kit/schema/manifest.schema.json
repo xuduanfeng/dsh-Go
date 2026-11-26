@@ -182,6 +182,25 @@
             },
             "additionalProperties": false
           }
+        },
+        "composer.banner": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "icon": {
+                "$ref": "#/$defs/iconName"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       }
     },

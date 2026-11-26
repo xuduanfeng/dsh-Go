@@ -218,6 +218,13 @@
                   }
                 }
               }
+            },
+            "composer.banner": {
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/banner"
+              }
             }
           }
         },
@@ -320,6 +327,28 @@
         },
         "ready": {
           "type": "boolean"
+        }
+      }
+    },
+    "banner": {
+      "type": "object",
+      "required": [
+        "id",
+        "ready"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "icon": {
+          "$ref": "#/$defs/iconName"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "live": {
+          "type": "boolean",
+          "description": "banner(id) registered: subscribe on the stream"
         }
       }
     },
@@ -561,6 +590,9 @@
             },
             "turn.note": {
               "const": 1
+            },
+            "composer.banner": {
+              "const": 1
             }
           }
         },
@@ -593,6 +625,15 @@
             },
             "turnNote": {
               "const": 16
+            },
+            "bannerText": {
+              "const": 120
+            },
+            "bannerNote": {
+              "const": 90
+            },
+            "bannerAction": {
+              "const": 8
             }
           }
         },
@@ -736,6 +777,9 @@
         },
         "turnNotesPerFeed": {
           "const": 64
+        },
+        "bannerActions": {
+          "const": 2
         }
       }
     }

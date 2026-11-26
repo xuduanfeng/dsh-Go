@@ -1,6 +1,6 @@
 // Small pure helpers shared by the native-plugin modules. Node built-ins only.
 import { createHash } from "node:crypto";
-import { LIMITS, SCOPE_KEYS, SEMVER, TONES } from "./limits.js";
+import { ICON, ID, LIMITS, SCOPE_KEYS, SEMVER, TONES } from "./limits.js";
 
 export const isPlainObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
   && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
@@ -36,6 +36,34 @@ export function sanitizeNotes(d) {
     if (text === "") continue;
     out[turn] = { text: chars(text) > LIMITS.textChars.turnNote ? truncateChars(text, LIMITS.textChars.turnNote) : text };
     if (TONES.includes(note.tone)) out[turn].tone = note.tone;
+  }
+  return out;
+}
+
+/** A banner push `{ text, note?, icon?, tone?, actions? }`: one card above the composer. Undefined when malformed. */
+export function sanitizeBanner(d) {
+  if (d === null || d === undefined) return null;
+  if (!isPlainObject(d) || typeof d.text !== "string") return undefined;
+  const text = cleanLine(d.text);
+  if (text === "") return undefined;
+  const out = { text: chars(text) > LIMITS.textChars.bannerText ? truncateChars(text, LIMITS.textChars.bannerText) : text };
+  if (typeof d.note === "string") {
+    const note = cleanLine(d.note);
+    if (note !== "") out.note = chars(note) > LIMITS.textChars.bannerNote ? truncateChars(note, LIMITS.textChars.bannerNote) : note;
+  }
+  if (typeof d.icon === "string" && ICON.test(d.icon)) out.icon = d.icon;
+  if (TONES.includes(d.tone)) out.tone = d.tone;
+  if (Array.isArray(d.actions)) {
+    const actions = [];
+    for (const a of d.actions) {
+      // Buttons keep their order; a malformed one is dropped without spending a slot.
+      if (actions.length >= LIMITS.bannerActions) break;
+      if (!isPlainObject(a) || typeof a.id !== "string" || !ID.test(a.id) || typeof a.label !== "string") continue;
+      const label = cleanLine(a.label);
+      if (label === "") continue;
+      actions.push({ id: a.id, label: chars(label) > LIMITS.textChars.bannerAction ? truncateChars(label, LIMITS.textChars.bannerAction) : label });
+    }
+    if (actions.length > 0) out.actions = actions;
   }
   return out;
 }

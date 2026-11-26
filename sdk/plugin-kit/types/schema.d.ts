@@ -592,6 +592,10 @@ export interface Manifest {
     "turn.note"?: {
       id: ManifestId
     }[]
+    "composer.banner"?: {
+      id: ManifestId
+      icon?: ManifestIconName
+    }[]
   }
   capabilities?: Array<"audio" | "voice" | "micro" | "overlay" | "files">
 }
@@ -615,8 +619,8 @@ export interface InvokeRequest {
   v: 1
   pkg: InvokePkg
   id: InvokeId
-  surface: "composer.actions" | "message.actions" | "composer.strip" | "panel" | "composer.tools" | "session.actions"
-  /** panel only */
+  surface: "composer.actions" | "message.actions" | "composer.strip" | "panel" | "composer.tools" | "session.actions" | "composer.banner"
+  /** panel and composer.banner only */
   action?: string
   /** panel only; any JSON, <= 4 KiB serialized */
   value?: unknown
@@ -838,6 +842,7 @@ export interface ContributionsPlugin {
       id: ContributionsId
       ready: boolean
     }[]
+    "composer.banner"?: ContributionsBanner[]
   }
   issues: ContributionsIssue[]
   capabilities?: Array<"audio" | "voice" | "micro" | "overlay" | "files">
@@ -863,6 +868,14 @@ export interface ContributionsStrip {
   /** strip(id) registered: subscribe on the stream */
   live?: boolean
   ready: boolean
+}
+
+export interface ContributionsBanner {
+  id: ContributionsId
+  icon?: ContributionsIconName
+  ready: boolean
+  /** banner(id) registered: subscribe on the stream */
+  live?: boolean
 }
 
 export interface ContributionsPanel {
@@ -923,6 +936,7 @@ export interface ContributionsLimits {
     "composer.tools"?: 2
     "session.actions"?: 2
     "turn.note"?: 1
+    "composer.banner"?: 1
   }
   textChars?: {
     pluginTitle?: 24
@@ -934,6 +948,9 @@ export interface ContributionsLimits {
     composerTool?: 8
     sessionAction?: 12
     turnNote?: 16
+    bannerText?: 120
+    bannerNote?: 90
+    bannerAction?: 8
   }
   viewBytes?: 32768
   viewNodes?: 120
@@ -982,6 +999,7 @@ export interface ContributionsLimits {
   pendingLabelChars?: 16
   pendingEarlyResultMs?: 5000
   turnNotesPerFeed?: 64
+  bannerActions?: 2
 }
 
 /** GET /dsh-go/v1/contributions response, protocol v1 */
@@ -1107,6 +1125,18 @@ export type StreamStripData = {
   text?: string | null
   icon?: string
   tone?: "good" | "warn" | "bad" | "info" | "muted"
+} | null
+
+/** Data model of a composer.banner subscription (§4.5). One card above the composer: two text lines and at most two buttons. */
+export type StreamBannerData = {
+  text?: string
+  note?: string
+  icon?: string
+  tone?: "good" | "warn" | "bad" | "info" | "muted"
+  actions?: {
+    id: string
+    label: string
+  }[]
 } | null
 
 /** Complete model; serialized UTF-8 <=1024 bytes, no unknown fields; <=10Hz. */

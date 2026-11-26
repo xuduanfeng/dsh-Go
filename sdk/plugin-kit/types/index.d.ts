@@ -13,7 +13,7 @@ import type {
   Manifest, ManifestAction, ManifestStrip, ManifestPanel, ManifestText,
   InvokeEffect, InvokeStaticEffect, InvokeScope, InvokeInsert, InvokeCommand, InvokeOpen, InvokeLink,
   InvokeToast, InvokeCopy, InvokeRefresh, InvokePatch, InvokePickFile, InvokePickImage, InvokeFileSelection,
-  ContributionsIssue, ContributionsPlugin, StreamStripData,
+  ContributionsIssue, ContributionsPlugin, StreamStripData, StreamBannerData,
 } from './schema.js'
 
 export * from './schema.js'
@@ -27,7 +27,7 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 export type { View, ViewNode, ViewBinding as Binding, Manifest, ContributionsIssue as Issue }
 export type Effect = InvokeEffect
 export type StaticEffect = InvokeStaticEffect
-export type Surface = 'composer.actions' | 'message.actions' | 'composer.strip' | 'panels' | 'composer.tools' | 'session.actions' | 'turn.note'
+export type Surface = 'composer.actions' | 'message.actions' | 'composer.strip' | 'panels' | 'composer.tools' | 'session.actions' | 'turn.note' | 'composer.banner'
 export type Component = ViewNode['type']
 export type Tone = Exclude<ViewTone, ViewBinding>
 export type Icon = Exclude<ViewIcon, ViewBinding>
@@ -134,6 +134,15 @@ export interface DshGoService {
   onCapability(handler: (scope: Scope, event: CapabilityEvent) => void | Promise<void>): Cancel
   panel<D = Record<string, unknown>>(id: string, def: PanelDefinition<D>): Cancel
   strip(id: string, data: DataFunction<StreamStripData & {}> | { data: DataFunction<StreamStripData & {}> }): Cancel
+  /**
+   * One card above the composer: `{ text, note?, icon?, tone?, actions? }`, or `null` to hide it.
+   * `actions` maps the button ids in the emitted data to handlers, the way a panel's `actions` do.
+   * Older bridges don't have this; to run on them, check `typeof ctx.dshGo.banner === 'function'` first.
+   */
+  banner(id: string, def: {
+    data: DataFunction<StreamBannerData & {}>
+    actions?: Record<string, InvokeHandler>
+  }): Cancel
   /**
    * Per-turn footnotes for a conversation: emit `{ [turnId]: { text, tone? } }` (≤ 16 characters each).
    * Older bridges don't have this; to run on them, check `typeof ctx.dshGo.turnNote === 'function'` first.
@@ -257,7 +266,7 @@ export function checkPending(result: unknown): undefined | {
   violation: boolean
 }
 
-export type { ManifestAction, ManifestStrip, ManifestPanel, ContributionsPlugin, StreamStripData }
+export type { ManifestAction, ManifestStrip, ManifestPanel, ContributionsPlugin, StreamStripData, StreamBannerData }
 
 export function textField(props: Omit<import('./schema.js').ViewTextFieldComponent, 'type'>): import('./schema.js').ViewTextFieldComponent
 export function number(props: Omit<import('./schema.js').ViewNumberComponent, 'type'>): import('./schema.js').ViewNumberComponent

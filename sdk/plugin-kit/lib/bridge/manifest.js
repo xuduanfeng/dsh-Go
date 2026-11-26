@@ -16,6 +16,7 @@ const ITEM_KEYS = {
   "composer.tools": new Set(["id", "label", "icon", "effect", "panel", "requires"]),
   "session.actions": new Set(["id", "label", "icon", "effect", "requires"]),
   "turn.note": new Set(["id"]),
+  "composer.banner": new Set(["id", "icon"]),
 };
 const LABEL_LIMIT = {
   "composer.actions": LIMITS.textChars.composerAction,
@@ -154,7 +155,7 @@ export function parseManifest(pkgJson, pkgDir) {
         if (typeof raw.icon === "string" && ICON.test(raw.icon)) item.icon = raw.icon;
         else issues.push(issue(at("icon"), "invalid-field", "error", "icon must match ^[a-z][a-z0-9-]{0,31}$"));
       }
-      if (surface === "turn.note") {
+      if (surface === "turn.note" || surface === "composer.banner") {
         // Nothing to show until its data function pushes.
       } else if (ACTION_SURFACES.includes(surface)) {
         item.label = parseText(raw.label);
@@ -324,6 +325,16 @@ export function renderPlugin(parsed, caps, live) {
         ready,
       });
     });
+    parsed.items["composer.banner"]?.forEach((it) => {
+      const liveBanner = live.banners?.has(it.id) === true;
+      if (!liveBanner) issues.push(issue(itemPtr("composer.banner", it), "no-handler", "warn", `${it.id} has no banner("${it.id}") registration`));
+      (row.contributes["composer.banner"] ??= []).push({
+        id: it.id,
+        ...(it.icon === undefined ? {} : { icon: it.icon }),
+        ready: liveBanner,
+        live: liveBanner,
+      });
+    });
     parsed.items.panels.forEach((it) => {
       const reg = live.panels.get(it.id);
       const ready = reg !== undefined || it.viewFile !== undefined;
@@ -382,6 +393,7 @@ export function checkManifest(pkgJson, pkgDir, opts = {}) {
     panels: new Map(panelIds.map((id) => [id, { data: dataPanels.has(id) }])),
     strips: new Set(assume ? all(["composer.strip"]) : (opts.strips ?? [])),
     notes: new Set(assume ? all(["turn.note"]) : (opts.notes ?? [])),
+    banners: new Set(assume ? all(["composer.banner"]) : (opts.banners ?? [])),
     handlers: new Set(assume ? all([...ACTION_SURFACES, "composer.strip", "panels"]) : opts.handlers),
     degraded: false,
     runtimeIssues: [],

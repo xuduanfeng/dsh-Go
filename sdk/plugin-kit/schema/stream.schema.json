@@ -558,6 +558,57 @@
         }
       }
     },
+    "bannerData": {
+      "description": "Data model of a composer.banner subscription (§4.5). One card above the composer: two text lines and at most two buttons.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 90
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,31}$"
+        },
+        "tone": {
+          "enum": [
+            "good",
+            "warn",
+            "bad",
+            "info",
+            "muted"
+          ]
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 8
+              }
+            }
+          }
+        }
+      }
+    },
     "microData": {
       "type": "object",
       "minProperties": 1,

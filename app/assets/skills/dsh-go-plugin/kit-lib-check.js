@@ -37,6 +37,7 @@ const WORDS = {
       c['composer.tools'] && `加号工具 ${c['composer.tools']}`,
       c['session.actions'] && `对话操作 ${c['session.actions']}`,
       c['turn.note'] && `回合尾注 ${c['turn.note']}`,
+      c['composer.banner'] && `提示卡 ${c['composer.banner']}`,
     ].filter(Boolean).join(' · '),
     view: (where, budget) => `视图 ${where}（${{ toolCard: '工具卡', panel: '面板', strip: '状态条' }[budget]}）`,
     viewOk: '能显示', viewFatal: '整块无法显示：', viewProblems: (n) => `，${n} 处问题`,
@@ -78,6 +79,7 @@ const WORDS = {
       c['composer.tools'] && `${c['composer.tools']} plus-panel tool(s)`,
       c['session.actions'] && `${c['session.actions']} chat action(s)`,
       c['turn.note'] && `${c['turn.note']} turn note`,
+      c['composer.banner'] && `${c['composer.banner']} banner`,
     ].filter(Boolean).join(' · '),
     view: (where, budget) => `View ${where} (${{ toolCard: 'tool card', panel: 'panel', strip: 'strip' }[budget]})`,
     viewOk: 'renders', viewFatal: 'does not render: ', viewProblems: (n) => `, ${n} problem(s)`,
@@ -307,7 +309,7 @@ async function loadIn(pkgJson, dir, w) {
       }
     }
   }
-  const feeds = [...host.parsed.items['composer.strip'], ...(host.parsed.items['turn.note'] ?? [])]
+  const feeds = [...(host.parsed.items['composer.strip'] ?? []), ...(host.parsed.items['turn.note'] ?? []), ...(host.parsed.items['composer.banner'] ?? [])]
     .map((item) => host.subscribe(item.id, { sessionId: 'check-session' }))
   // A data function may be async: wait for it to finish starting, but not for one that never does.
   let timer

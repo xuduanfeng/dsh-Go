@@ -69,10 +69,11 @@ abstract final class DshGoSurfaces {
   static const composerTools = 'composer.tools';
   static const sessionActions = 'session.actions';
   static const turnNote = 'turn.note';
+  static const composerBanner = 'composer.banner';
 
   /// What an app that draws the newer places says in [DshGoCaps.surfaces]. A bridge moves a panel
   /// that asked only for [DshGoPanel.pluginPage] somewhere else for an app that doesn't list it.
-  static const all = [...v1, composerTools, sessionActions, turnNote, DshGoPanel.pluginPage];
+  static const all = [...v1, composerTools, sessionActions, turnNote, composerBanner, DshGoPanel.pluginPage];
 }
 
 // -----------------------------------------------------------------------------
@@ -314,6 +315,32 @@ class DshGoStrip {
   final bool live;
 }
 
+/// One card above the composer (`composer.banner`): two lines and up to two buttons.
+class DshGoBanner {
+  const DshGoBanner({required this.id, this.icon, this.ready = true, this.live = false});
+
+  static DshGoBanner? fromJson(Object? json) {
+    final map = asMap(json);
+    final id = asString(map?['id']);
+    if (map == null || id == null || id.isEmpty) return null;
+    return DshGoBanner(
+      id: id,
+      icon: asString(map['icon']),
+      ready: asBool(map['ready']) ?? true,
+      live: asBool(map['live']) ?? false,
+    );
+  }
+
+  final String id;
+  final String? icon;
+
+  /// Has a `banner(id)` registration, so it can push data.
+  final bool ready;
+
+  /// The plugin pushes data: subscribe.
+  final bool live;
+}
+
 /// A native panel (`panels`).
 class DshGoPanel {
   const DshGoPanel({
@@ -391,6 +418,7 @@ class DshGoPlugin {
     this.composerTools = const [],
     this.sessionActions = const [],
     this.turnNotes = const [],
+    this.banners = const [],
     this.issues = const [],
     this.capabilities = const {},
     this.media = const [],
@@ -425,6 +453,7 @@ class DshGoPlugin {
         for (final item in asListOrEmpty(contributes[DshGoSurfaces.turnNote]))
           if (asMap(item) case final note? when asBool(note['ready']) ?? false) ?asString(note['id']),
       ],
+      banners: list(DshGoSurfaces.composerBanner, DshGoBanner.fromJson),
       issues: [for (final item in asListOrEmpty(map['issues'])) ?DshGoIssue.fromJson(item)],
       capabilities: asStringList(map['capabilities']).where(dshGoFeatures.contains).toSet(),
       media: list('media', dshGoResourceId).take(2).toList(),
@@ -450,6 +479,7 @@ class DshGoPlugin {
   final List<DshGoAction> composerTools;
   final List<DshGoAction> sessionActions;
   final List<String> turnNotes;
+  final List<DshGoBanner> banners;
 
   /// [state] is `ok`: the native part shows. Otherwise the contributions are
   /// empty and the app falls back to the web.

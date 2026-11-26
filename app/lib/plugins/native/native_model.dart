@@ -19,7 +19,8 @@ enum NativeSurface {
   panel(DshGoSurfaces.panels, DshGoSurfaces.panel),
   composerTools(DshGoSurfaces.composerTools, DshGoSurfaces.composerTools),
   sessionActions(DshGoSurfaces.sessionActions, DshGoSurfaces.sessionActions),
-  turnNote(DshGoSurfaces.turnNote, DshGoSurfaces.turnNote);
+  turnNote(DshGoSurfaces.turnNote, DshGoSurfaces.turnNote),
+  composerBanner(DshGoSurfaces.composerBanner, DshGoSurfaces.composerBanner);
 
   const NativeSurface(this.wire, this.invoke);
 
@@ -37,6 +38,7 @@ enum NativeSurface {
     composerTools => appL10n.plugslotsSurfaceComposerTools,
     sessionActions => appL10n.plugslotsSurfaceSessionActions,
     turnNote => appL10n.plugslotsSurfaceTurnNote,
+    composerBanner => appL10n.plugslotsSurfaceComposerBanner,
   };
 
   static NativeSurface? byWire(String wire) => values.where((s) => s.wire == wire).firstOrNull;
@@ -96,6 +98,17 @@ abstract final class NativeLimits {
 
   /// The status line's text.
   static const stripTextMax = 24;
+
+  /// The banner's two lines.
+  static const bannerTextMax = 120;
+  static const bannerNoteMax = 90;
+
+  /// A banner button's label, and how many a card holds.
+  static const bannerLabelMax = 8;
+  static const bannerActions = 2;
+
+  /// Cards above the composer, every plugin's: the first one shows.
+  static const bannersTotal = 1;
 
   /// A toast.
   static const toastMax = 40;
@@ -260,6 +273,28 @@ class NativeStrip {
   int get hashCode => Object.hash(package, id, icon, text, panel, tappable, live);
 }
 
+/// One card above the composer a plugin keeps (`composer.banner`).
+@immutable
+class NativeBanner {
+  const NativeBanner({required this.package, required this.id, this.icon, this.live = false});
+
+  final String package;
+  final String id;
+
+  /// IconName; the plugin's data may name another.
+  final String? icon;
+
+  /// The plugin pushes data: subscribe.
+  final bool live;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NativeBanner && other.package == package && other.id == id && other.icon == icon && other.live == live;
+
+  @override
+  int get hashCode => Object.hash(package, id, icon, live);
+}
+
 /// A native panel and where it may appear.
 @immutable
 class NativePanel {
@@ -326,6 +361,7 @@ class NativePlugin {
     this.composerTools = const [],
     this.sessionActions = const [],
     this.turnNotes = const [],
+    this.banners = const [],
     this.issues = const [],
     this.declared = const {},
     this.capabilities = const {},
@@ -358,6 +394,9 @@ class NativePlugin {
   /// Ids of its per-turn notes.
   final List<String> turnNotes;
 
+  /// Its cards above the composer.
+  final List<NativeBanner> banners;
+
   /// The bridge's and the app's findings.
   final List<NativeIssue> issues;
 
@@ -383,6 +422,7 @@ class NativePlugin {
       composerTools.isEmpty &&
       sessionActions.isEmpty &&
       turnNotes.isEmpty &&
+      banners.isEmpty &&
       composerActions.isEmpty &&
       messageActions.isEmpty &&
       strips.isEmpty &&
@@ -404,6 +444,7 @@ class NativePlugin {
       listEquals(other.composerTools, composerTools) &&
       listEquals(other.sessionActions, sessionActions) &&
       listEquals(other.turnNotes, turnNotes) &&
+      listEquals(other.banners, banners) &&
       listEquals(other.issues, issues) &&
       setEquals(other.declared, declared) &&
       setEquals(other.capabilities, capabilities) &&
@@ -540,6 +581,10 @@ NativePlugin _plugin(DshGoPlugin p, Set<String> features) {
   final tools = actions(NativeSurface.composerTools, p.composerTools, NativeLimits.toolLabelMax);
   final sessionActions = actions(NativeSurface.sessionActions, p.sessionActions, NativeLimits.menuLabelMax);
   final turnNotes = p.turnNotes.take(1).toList();
+  final banners = [
+    for (final b in p.banners.where((b) => b.ready).take(NativeLimits.bannersTotal))
+      NativeBanner(package: p.pkg, id: b.id, icon: b.icon, live: b.live),
+  ];
   return NativePlugin(
     package: p.pkg,
     title: p.title,
@@ -556,6 +601,7 @@ NativePlugin _plugin(DshGoPlugin p, Set<String> features) {
     composerTools: List.unmodifiable(tools),
     sessionActions: List.unmodifiable(sessionActions),
     turnNotes: List.unmodifiable(turnNotes),
+    banners: List.unmodifiable(banners),
     issues: List.unmodifiable(issues),
     declared: {
       if (composer.isNotEmpty) NativeSurface.composerActions,
@@ -565,6 +611,7 @@ NativePlugin _plugin(DshGoPlugin p, Set<String> features) {
       if (tools.isNotEmpty) NativeSurface.composerTools,
       if (sessionActions.isNotEmpty) NativeSurface.sessionActions,
       if (turnNotes.isNotEmpty) NativeSurface.turnNote,
+      if (banners.isNotEmpty) NativeSurface.composerBanner,
     },
     capabilities: p.capabilities,
     media: p.capabilities.contains('audio') ? p.media : const [],

@@ -15,7 +15,7 @@ import { LOCALE, call, errorText, isPlainObject, normalizeScope, toJson, utf8Byt
 
 export const STREAM_PATH = "/dsh-go/v1/stream";
 const BASE = "/dsh-go/v1/";
-const SURFACE_KEYS = { "composer.actions": "composer.actions", "message.actions": "message.actions", "composer.strip": "composer.strip", panel: "panels", "composer.tools": "composer.tools", "session.actions": "session.actions" };
+const SURFACE_KEYS = { "composer.actions": "composer.actions", "message.actions": "message.actions", "composer.strip": "composer.strip", panel: "panels", "composer.tools": "composer.tools", "session.actions": "session.actions", "composer.banner": "composer.banner" };
 const CONTEXT_FOR = { "composer.actions": ["draft", "clipboard"], "composer.tools": ["draft", "clipboard"], "message.actions": ["message"] };
 const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
 const SUB_ID = /^.{1,32}$/su;
@@ -273,9 +273,11 @@ export function createNativeRoutes(core) {
     if (typeof body.pkg !== "string" || !PKG.test(body.pkg)) fail(400, "bad-request", "pkg is not a package name");
     if (typeof body.id !== "string" || !ID.test(body.id)) fail(400, "bad-request", "id is not an id");
     const surfaceKey = SURFACE_KEYS[body.surface];
-    if (surfaceKey === undefined) fail(400, "bad-request", "surface must be composer.actions, message.actions, composer.strip or panel");
+    if (surfaceKey === undefined) fail(400, "bad-request", "surface must be composer.actions, message.actions, composer.strip, panel or composer.banner");
     const isPanel = body.surface === "panel";
-    if (body.action !== undefined && (!isPanel || typeof body.action !== "string" || body.action.length < 1 || body.action.length > 64)) fail(400, "bad-request", "action is a 1-64 character string, panel only");
+    // A banner has one button per action, so it takes `action` exactly like a panel does.
+    const isBanner = body.surface === "composer.banner";
+    if (body.action !== undefined && ((!isPanel && !isBanner) || typeof body.action !== "string" || body.action.length < 1 || body.action.length > 64)) fail(400, "bad-request", "action is a 1-64 character string, panel or banner only");
     if (body.value !== undefined) {
       if (!isPanel) fail(400, "bad-request", "value is panel only");
       const json = toJson(body.value);
@@ -299,9 +301,11 @@ export function createNativeRoutes(core) {
     if (!(item.requires ?? []).every(x => capabilityConn?.features?.includes(x))) fail(409, "unsupported", "action requires negotiated capabilities");
     if (item.effect !== undefined) fail(409, "no-handler", `${body.id} has a static effect; the app runs it without invoke`);
     const panel = isPanel ? core.registration(body.pkg, "panels", body.id) : undefined;
+    const banner = isBanner ? core.registration(body.pkg, "banners", body.id) : undefined;
     const handler = core.registration(body.pkg, "handlers", body.id);
-    let kind = "panels", registration = panel;
-    let fn = isPanel && body.action !== undefined ? panel?.def.actions?.[body.action] : undefined;
+    let kind = isPanel ? "panels" : isBanner ? "banners" : "handlers";
+    let registration = isPanel ? panel : isBanner ? banner : handler;
+    let fn = isPanel ? panel?.def.actions?.[body.action] : isBanner ? banner?.def.actions?.[body.action] : handler?.def;
     if (fn == null) { kind = "handlers"; registration = handler; fn = handler?.def; }
     if (typeof fn !== "function") fail(409, "no-handler", `no handler for ${body.id}${body.action ? `/${body.action}` : ""}`);
     // Bind all results (not only file capabilities) to this exact registration.
@@ -605,10 +609,10 @@ export function createNativeRoutes(core) {
     if (state === "degraded") return end("degraded");
     if (state !== "ok") return end("not-native");
     const declared = rec.parsed.ids.get(msg.id);
-    if (declared !== "panels" && declared !== "composer.strip" && declared !== "turn.note") return end("not-found");
+    if (declared !== "panels" && declared !== "composer.strip" && declared !== "turn.note" && declared !== "composer.banner") return end("not-found");
     // A turn's note belongs to a conversation.
     if (declared === "turn.note" && scope.scope.sessionId === undefined) return end("not-found");
-    const feed = core.feed(msg.pkg, msg.id, declared === "panels" ? "panel" : declared === "turn.note" ? "note" : "strip", scope, conn.locale);
+    const feed = core.feed(msg.pkg, msg.id, declared === "panels" ? "panel" : declared === "turn.note" ? "note" : declared === "composer.banner" ? "banner" : "strip", scope, conn.locale);
     if (feed === undefined) return end("limit");
     const sub = {
       id: msg.sub,
