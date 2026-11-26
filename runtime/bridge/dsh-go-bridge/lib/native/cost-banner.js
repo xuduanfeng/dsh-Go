@@ -168,12 +168,38 @@ export function createCostBanner(ctx, options = {}) {
   };
 
   const look = (session) => {
-    if (typeof session?.snapshotEvents !== 'function') return;
+    if (typeof session?.snapshotEvents !== 'function') return undefined;
     try {
-      for (const event of session.snapshotEvents()) absorb(session.id, event);
+      let lastEventAt;
+      for (const event of session.snapshotEvents()) {
+        if (Number.isFinite(event?.time)) lastEventAt = event.time;
+        absorb(session.id, event);
+      }
+      return lastEventAt;
     } catch {
       // A host without the snapshot API: the card fills in from live events.
+      return undefined;
     }
+  };
+
+  /**
+   * A session opened from the sidebar owes its card immediately, before the
+   * next assistant message. The token meter already knows the context the
+   * host is carrying, so a cold session needs no live event to be priced.
+   */
+  const remember = (session) => {
+    if (session === undefined) return;
+    const lastEventAt = look(session);
+    if (chats.has(session.id)) return;
+    let pressureTokens;
+    try {
+      pressureTokens = ctx.get?.('tokenMeter')?.contextPressure?.(session)?.pressureTokens;
+    } catch {
+      // No meter in this host: the card appears once a turn reports usage.
+      return;
+    }
+    if (typeof pressureTokens !== 'number' || !(pressureTokens > 0)) return;
+    set(session.id, { context: pressureTokens, lastAt: lastEventAt ?? now() });
   };
 
   ctx.on('session/event', (session, event) => absorb(session?.id, event));
@@ -192,10 +218,7 @@ export function createCostBanner(ctx, options = {}) {
       const sessionId = scope?.sessionId;
       const push = () => {
         if (typeof sessionId !== 'string') return emit(null);
-        if (!chats.has(sessionId)) {
-          const session = sessionOf(sessionId);
-          if (session !== undefined) look(session);
-        }
+        if (!chats.has(sessionId)) remember(sessionOf(sessionId));
         emit(cardFor(chats.get(sessionId), now(), { holidays, dismissed: dismissed.get(sessionId) }));
       };
       push();

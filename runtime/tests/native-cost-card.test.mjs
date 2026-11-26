@@ -124,3 +124,24 @@ test("a chat's card follows its usage, and its buttons work", async (t) => {
   assert.deepEqual(after, [null], "the same bucket stays dismissed");
   cancel2();
 });
+
+test('a session opened cold is priced from the token meter before any turn', () => {
+  const pressure = { pressureTokens: 105_000, contextWindow: 1_000_000 };
+  const session = {
+    id: 's-cold',
+    snapshotEvents: () => [],
+  };
+  const ctx = {
+    get: (name) => (name === 'sessions'
+      ? { get: (id) => (id === 's-cold' ? session : undefined) }
+      : name === 'tokenMeter' ? { contextPressure: () => pressure } : undefined),
+    on: () => {},
+  };
+  const banner = createCostBanner(ctx, { now: () => Date.parse('2026-11-28T02:00:00Z') });
+  const out = [];
+  const cancel = banner.data({ sessionId: 's-cold' }, (d) => out.push(d));
+  assert.equal(out.length, 1);
+  assert.match(out[0].text, /105k token/);
+  assert.match(out[0].text, /0\.11 元/, 'the meter value is priced at the off-peak miss rate');
+  cancel();
+});
