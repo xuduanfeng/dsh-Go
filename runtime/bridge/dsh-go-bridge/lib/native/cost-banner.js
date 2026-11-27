@@ -145,6 +145,8 @@ export function createCostBanner(ctx, options = {}) {
   /** sessionId -> buckets the user sent away. */
   const dismissed = new Map();
   const listeners = new Set();
+  /** TEMPORARY (diagnostic build): why a session has no card yet. */
+  const probe = new Map();
 
   const set = (sessionId, value) => {
     chats.set(sessionId, value);
@@ -187,29 +189,102 @@ export function createCostBanner(ctx, options = {}) {
    * next assistant message. The token meter already knows the context the
    * host is carrying, so a cold session needs no live event to be priced.
    */
+  // Cordis hands a service both as a property and through get(); a bridge-scoped
+  // context can have one and not the other, so read whichever answers.
+  const service = (name) => {
+    try {
+      const value = ctx[name];
+      if (value !== undefined && value !== null) return value;
+    } catch {
+      // Not injected on this context: fall through to get().
+    }
+    try {
+      return ctx.get?.(name);
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Sessions whose log we already replayed, so a cold read happens once. */
+  const coldTried = new Set();
+
+  /**
+   * A session opened from the sidebar owes its card before the next assistant
+   * message. Attached sessions answer through the meter; a session the host has
+   * not attached (the phone engine keeps none) is replayed from its log.
+   */
+  const rememberCold = async (sessionId) => {
+    if (coldTried.has(sessionId)) return;
+    coldTried.add(sessionId);
+    const query = service('sessionQuery');
+    if (query?.readSession === undefined) {
+      probe.set(sessionId, 'noQuery');
+      return;
+    }
+    try {
+      const read = await query.readSession(sessionId);
+      const events = Array.isArray(read?.events) ? read.events : [];
+      for (const event of events) absorb(sessionId, event);
+      probe.set(sessionId, `r${events.length} c${chats.get(sessionId)?.context ?? '-'}`);
+    } catch (error) {
+      probe.set(sessionId, `rERR ${String(error?.message ?? error).slice(0, 30)}`);
+    }
+    for (const notify of listeners) notify(sessionId);
+  };
+
   const remember = (session) => {
     if (session === undefined) return;
+    let events = -1;
+    try {
+      const list = typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : undefined;
+      events = Array.isArray(list) ? list.length : -1;
+    } catch {
+      events = -2;
+    }
     const lastEventAt = look(session);
     if (chats.has(session.id)) return;
     let pressureTokens;
     try {
-      pressureTokens = ctx.get?.('tokenMeter')?.contextPressure?.(session)?.pressureTokens;
+      pressureTokens = service('tokenMeter')?.contextPressure?.(session)?.pressureTokens;
     } catch {
-      // No meter in this host: the card appears once a turn reports usage.
+      probe.set(session.id, `e${events} pERR id${String(session.id).slice(0, 6)}`);
       return;
     }
+    probe.set(session.id, `e${events} p${pressureTokens ?? '-'} id${String(session.id).slice(0, 6)}`);
     if (typeof pressureTokens !== 'number' || !(pressureTokens > 0)) return;
     set(session.id, { context: pressureTokens, lastAt: lastEventAt ?? now() });
   };
 
-  ctx.on('session/event', (session, event) => absorb(session?.id, event));
+  /** Sessions the event stream has shown us: the host may not answer get() cold. */
+  const seenSessions = new Map();
+  ctx.on('session/event', (session, event) => {
+    if (typeof session?.id === 'string') seenSessions.set(session.id, session);
+    absorb(session?.id, event);
+  });
 
   const sessionOf = (sessionId) => {
-    try {
-      return ctx.get('sessions')?.get?.(sessionId);
-    } catch {
+    const seen = seenSessions.get(sessionId);
+    if (seen !== undefined) return seen;
+    const sessions = service('sessions');
+    if (sessions === undefined) {
+      probe.set(sessionId, `noSessions id${String(sessionId).slice(0, 6)}`);
       return undefined;
     }
+    try {
+      const found = sessions.get?.(sessionId);
+      if (found !== undefined) return found;
+    } catch {
+      // Fall through to the list: an id the store no longer keys still exists live.
+    }
+    try {
+      const live = sessions.list?.() ?? [];
+      const hit = live.find((candidate) => candidate?.id === sessionId);
+      if (hit !== undefined) return hit;
+      probe.set(sessionId, `n${live.length} miss id${String(sessionId).slice(0, 6)}`);
+    } catch {
+      probe.set(sessionId, `listERR id${String(sessionId).slice(0, 6)}`);
+    }
+    return undefined;
   };
 
   return {
@@ -218,8 +293,27 @@ export function createCostBanner(ctx, options = {}) {
       const sessionId = scope?.sessionId;
       const push = () => {
         if (typeof sessionId !== 'string') return emit(null);
-        if (!chats.has(sessionId)) remember(sessionOf(sessionId));
-        emit(cardFor(chats.get(sessionId), now(), { holidays, dismissed: dismissed.get(sessionId) }));
+        if (!chats.has(sessionId)) {
+          const session = sessionOf(sessionId);
+          if (session === undefined) {
+            if (!probe.has(sessionId)) probe.set(sessionId, 's0');
+            void rememberCold(sessionId);
+          } else {
+            remember(session);
+          }
+        }
+        const card = cardFor(chats.get(sessionId), now(), { holidays, dismissed: dismissed.get(sessionId) });
+        if (card !== null) return emit(card);
+        // Priced but held back (below the gate, or sent away): nothing to show.
+        if (chats.get(sessionId) !== undefined) return emit(null);
+        const seen = probe.get(sessionId) ?? 's?';
+        const chat = chats.get(sessionId);
+        return emit({
+          text: `[dbg] ${seen} c${chat?.context ?? '-'} t${Math.round((now() % 100000) / 10)}`,
+          note: 'cost-card 诊断版：出现这行说明卡片通道是通的',
+          icon: 'wallet',
+          tone: 'warn',
+        });
       };
       push();
       listeners.add(push);

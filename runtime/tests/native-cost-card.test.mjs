@@ -145,3 +145,34 @@ test('a session opened cold is priced from the token meter before any turn', () 
   assert.match(out[0].text, /0\.11 元/, 'the meter value is priced at the off-peak miss rate');
   cancel();
 });
+
+test('a session the host keeps no record of is priced by replaying its log', async () => {
+  // The phone engine attaches nothing: get() and list() both come back empty,
+  // so the only honest answer is the session's own durable log.
+  const events = [
+    { type: 'user/message', time: Date.parse('2026-11-28T01:00:00Z') },
+    {
+      type: 'assistant/message',
+      time: Date.parse('2026-11-28T01:05:00Z'),
+      data: {
+        usage: { inputTokens: 100_000, cacheReadTokens: 5_000, cacheWriteTokens: 0, outputTokens: 1_200 },
+        message: { source: { model: 'deepseek-v4-pro' } },
+      },
+    },
+  ];
+  const ctx = {
+    get: (name) => (name === 'sessions'
+      ? { get: () => undefined, list: () => [] }
+      : name === 'sessionQuery' ? { readSession: async () => ({ events }) } : undefined),
+    on: () => {},
+  };
+  const banner = createCostBanner(ctx, { now: () => Date.parse('2026-11-28T02:00:00Z') });
+  const out = [];
+  const cancel = banner.data({ sessionId: 'session-9c06ae58-cold' }, (d) => out.push(d));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  cancel();
+  const card = out.filter((d) => d !== null && !d.text.startsWith('[dbg]')).at(-1);
+  assert.ok(card !== undefined, 'the replay produces a card');
+  assert.match(card.text, /106k token/, 'input plus cache read is the context');
+  assert.match(card.text, /0\.48 元/, 'v4-pro off-peak miss is 4.5 per million');
+});
