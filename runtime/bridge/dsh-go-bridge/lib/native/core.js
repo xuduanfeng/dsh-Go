@@ -269,9 +269,10 @@ export class NativeCore {
     const key = `${s.fingerprint}:${this.regsVersion}:${this.healthVersion}:${s.graphRev}\0${caps.key}`;
     const hit = this.contribMemo.get(key);
     if (hit) return hit;
-    const plugins = [...this.builtinPlugins.values()].map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg)))
-      .concat([...s.plugins.values()].sort((a, b) => a.pkg.localeCompare(b.pkg))
-        .map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg))));
+    const plugins = [
+      ...[...this.builtinPlugins.values()].map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg))),
+      ...[...s.plugins.values()].map((rec) => renderPlugin(rec.parsed, caps, this.#liveOf(rec.pkg))),
+    ].sort((a, b) => a.pkg.localeCompare(b.pkg));
     const body = { v: PROTOCOL, bridge: this.version, bootRev: s.graphRev, limits: this.limits, plugins };
     const rev = shortHash(JSON.stringify(body));
     const out = { v: PROTOCOL, bridge: this.version, rev, bootRev: s.graphRev, limits: this.limits, plugins };
