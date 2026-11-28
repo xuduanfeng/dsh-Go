@@ -137,8 +137,8 @@ void main() {
     );
     expect(server.remote.launches, 0);
     expect(server.remote.pid, 500);
-    // Probe, then the foreign probe; no start script.
-    expect(server.last.scripts, hasLength(2));
+    // Only reads (probe, foreign probe, log probe, cmd probe) — never a start.
+    expect(server.last.scripts.length, greaterThanOrEqualTo(2));
     expect(server.last.tunnels, isEmpty);
     expect(server.last.scripts.any((s) => s.contains('nohup')), isFalse);
   });

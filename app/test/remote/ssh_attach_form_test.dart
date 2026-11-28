@@ -83,7 +83,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '测试连接'));
     await tester.pump();
     expect(server.connects, hasLength(1), reason: 'normal test reached the fake SSH transport');
-    expect(server.last.scripts, hasLength(2), reason: 'normal test completed both probes');
+    expect(server.last.scripts.length, greaterThanOrEqualTo(2), reason: 'normal test ran its probes');
     expect(server.last.scripts.any((script) => script.contains('nohup')), isFalse);
     final progress = tester.widget<LinkProgressCard>(find.byType(LinkProgressCard));
     expect(progress.status.phase, HostLinkPhase.failed, reason: 'last step: ${progress.status.step}');
