@@ -5,7 +5,6 @@
 // thumbnails, and the "generated files" card for turns without deliverables.
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';

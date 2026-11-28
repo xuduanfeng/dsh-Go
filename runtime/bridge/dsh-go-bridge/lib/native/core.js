@@ -442,7 +442,9 @@ export class NativeCore {
     const replaced = regs[kind].has(id);
     regs[kind].set(id, { def, token });
     if (replaced && FEED_KINDS.has(kind)) for (const feed of [...this.feeds.values()]) if (feed.pkg === pkg && feed.id === id) feed.stop("not-found");
-    const rec = this.plugin(pkg);
+    // Built-ins never come from the loader, so looking them up through scan()
+    // would resolve an unrelated plugin source just to read their own manifest.
+    const rec = token === BUILTIN_TOKEN ? this.builtinPlugins.get(pkg) : this.plugin(pkg);
     const declared = rec?.parsed.ids.get(id);
     const ok = kind === "capability" ? (rec?.parsed.capabilities?.length ?? 0) > 0
       : kind === "media" || kind === "micro" ? declared === kind
