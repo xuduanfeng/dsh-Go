@@ -59,15 +59,17 @@ void main() {
         expect(tester.takeException(), isNull);
         final l10n = appL10n;
         _visible(tester, find.text(l10n.chatQueuedAfterTurn), 320);
-        final labels = [l10n.chatSendNow, l10n.chatSwitchToSteer, l10n.chatWithdraw];
+        final labels = [l10n.chatSteerSend, l10n.chatStopAndSend, l10n.chatWithdraw];
         for (final label in labels) {
           _visible(tester, find.widgetWithText(TextButton, label), 320);
           _visible(tester, find.text(label), 320);
         }
-        await tester.tap(find.text(l10n.chatSendNow));
+        await tester.tap(find.text(l10n.chatSteerSend));
+        await h.settle(tester);
+        expect(h.client.calls, ['steer:queued-item']);
+        await tester.tap(find.text(l10n.chatStopAndSend));
         await h.settle(tester);
         expect(h.sentNow.single.inboxId, 'queued-item');
-        await tester.tap(find.text(l10n.chatSwitchToSteer));
         await h.settle(tester);
         expect(h.client.calls, ['steer:queued-item']);
         await tester.tap(find.text(l10n.chatWithdraw));
@@ -85,14 +87,15 @@ void main() {
       final l10n = appL10n;
       final label = running ? l10n.chatSteerNextStep : l10n.chatUnsent;
       _visible(tester, find.text(label), 320);
-      expect(find.text(l10n.chatSwitchToSteer), findsNothing);
-      final send = running ? l10n.chatSendNow : l10n.commonSend;
-      for (final action in [send, l10n.chatWithdraw]) {
+      expect(find.text(l10n.chatSteerSend), findsNothing);
+      // While a turn runs, a next-step prompt only offers 撤回 — nothing may stop it.
+      final actions = running ? [l10n.chatWithdraw] : [l10n.commonSend, l10n.chatWithdraw];
+      for (final action in actions) {
         _visible(tester, find.widgetWithText(TextButton, action), 320);
         await tester.tap(find.text(action));
         await h.settle(tester);
       }
-      expect(h.sentNow.single.inboxId, 'queued-item');
+      if (!running) expect(h.sentNow.single.inboxId, 'queued-item');
       expect(h.withdrawn.single.inboxId, 'queued-item');
       expect(h.client.calls, isEmpty);
       expect(tester.takeException(), isNull);
@@ -105,7 +108,7 @@ void main() {
     final l10n = appL10n;
     final centers = [
       tester.getCenter(find.text(l10n.chatQueuedAfterTurn)),
-      for (final label in [l10n.chatSendNow, l10n.chatSwitchToSteer, l10n.chatWithdraw])
+      for (final label in [l10n.chatSteerSend, l10n.chatStopAndSend, l10n.chatWithdraw])
         tester.getCenter(find.widgetWithText(TextButton, label)),
     ];
     for (var i = 1; i < centers.length; i++) {

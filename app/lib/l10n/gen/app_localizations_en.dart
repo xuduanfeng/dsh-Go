@@ -4009,6 +4009,12 @@ class L10nEn extends L10n {
   String get chatSwitchToSteer => 'Steer instead';
 
   @override
+  String get chatSteerSend => 'Steer in';
+
+  @override
+  String get chatStopAndSend => 'Stop and send';
+
+  @override
   String get chatWithdraw => 'Undo';
 
   @override
@@ -17525,6 +17531,9 @@ class L10nEn extends L10n {
   String get plugslotsSurfacePanel => 'Panels';
 
   @override
+  String get plugslotsSurfaceComposerBanner => 'Banner';
+
+  @override
   String get plugslotsNativeUi => 'Native UI';
 
   @override
@@ -17991,8 +18000,7 @@ class L10nEn extends L10n {
   String get remoteAttachOnly => 'Attach only';
 
   @override
-  String get remoteManagedHelp =>
-      'Start or reuse app-managed DSH. A live instance that cannot be reused is never replaced automatically.';
+  String get remoteManagedHelp => 'Reuse a DSH already running on the computer; never start, stop or restart it.';
 
   @override
   String get remoteAttachOnlyHelp =>
@@ -18020,15 +18028,15 @@ class L10nEn extends L10n {
       'On by default. Negotiate compression after authentication; use uncompressed transport if unsupported.';
 
   @override
-  String get remoteRestartManaged => 'Restart managed DSH';
+  String get remoteRestartManaged => 'Check DSH again';
 
   @override
   String get remoteRestartManagedWarning =>
-      'This stops the remote DSH recorded by the app and starts it again. Other clients and active chats may be interrupted. Continue only after checking nobody else is using it. Normal connection tests never do this.';
+      'This drops the current connection and checks again for a DSH already running on the computer. It never starts or restarts one. Normal connection tests never do this.';
 
   @override
   String get remoteErrSharedInstance =>
-      'Remote managed DSH is still running, but its start command differs or its launch log is missing. To protect shared use, it was not restarted. Check the settings, use Attach only, or explicitly choose Restart managed DSH in Edit host.';
+      'Remote DSH is still running, but its launch log is missing. Use Attach only, or restart dsh on the computer and connect again.';
 
   @override
   String get remoteErrAttachSettings => 'Enter a valid remote DSH port and launch token';
@@ -18052,7 +18060,7 @@ class L10nEn extends L10n {
   String get remoteStepVerifyHostKey => 'Verify host fingerprint';
 
   @override
-  String get remoteStepStartDsh => 'Start DSH';
+  String get remoteStepStartDsh => 'Find DSH';
 
   @override
   String get remoteStepTunnel => 'Create tunnel';
@@ -18208,7 +18216,7 @@ class L10nEn extends L10n {
 
   @override
   String get remoteErrDshTokenRejected =>
-      'Remote DSH rejected the token; it was not restarted. Check the token, or explicitly restart the managed instance in Edit host.';
+      'Remote DSH rejected the token; check how DSH was started on the computer, or use Attach only.';
 
   @override
   String get remoteErrDshSignIn => 'Couldn’t sign in to remote DSH';
@@ -18221,6 +18229,11 @@ class L10nEn extends L10n {
 
   @override
   String get remoteErrDshStopped => 'Remote DSH stopped running';
+
+  @override
+  String remoteErrDshNotRunning(int port) {
+    return 'dsh is not running on the computer: start it there first (default port $port), then connect again';
+  }
 
   @override
   String get remoteErrSshDisconnected => 'SSH disconnected';
@@ -22510,6 +22523,9 @@ class L10nEn extends L10n {
 
   @override
   String get stateChatTurnEnded => 'This turn has ended. Your message will start a new turn.';
+
+  @override
+  String get stateChatSteerTooLate => 'Too late to steer this turn; the message stays queued.';
 
   @override
   String get stateChatSteerFailed => 'Couldn’t steer';

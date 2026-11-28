@@ -3809,6 +3809,12 @@ class L10nZh extends L10n {
   String get chatSwitchToSteer => '改为插话';
 
   @override
+  String get chatSteerSend => '插话发送';
+
+  @override
+  String get chatStopAndSend => '停止并发送';
+
+  @override
   String get chatWithdraw => '撤回';
 
   @override
@@ -16618,6 +16624,9 @@ class L10nZh extends L10n {
   String get plugslotsSurfacePanel => '面板';
 
   @override
+  String get plugslotsSurfaceComposerBanner => '提示卡';
+
+  @override
   String get plugslotsNativeUi => '原生界面';
 
   @override
@@ -17068,13 +17077,13 @@ class L10nZh extends L10n {
   String get remoteDshMode => '实例管理';
 
   @override
-  String get remoteManaged => '托管启动';
+  String get remoteManaged => '托管复用';
 
   @override
   String get remoteAttachOnly => '只连接';
 
   @override
-  String get remoteManagedHelp => '自动启动或复用 App 托管的 DSH；不会自动替换存活但无法复用的实例。';
+  String get remoteManagedHelp => '复用电脑上已运行的 DSH；不会启动、停止或重启它。';
 
   @override
   String get remoteAttachOnlyHelp => '只转发到远端 127.0.0.1 的固定端口；不启动、停止或重启 DSH。';
@@ -17098,14 +17107,13 @@ class L10nZh extends L10n {
   String get remoteSshCompressionHelp => '默认开启；与服务器协商认证后压缩，不支持时使用未压缩传输。';
 
   @override
-  String get remoteRestartManaged => '重启托管 DSH';
+  String get remoteRestartManaged => '重新检测 DSH';
 
   @override
-  String get remoteRestartManagedWarning => '这会停止 App 记录的远端 DSH 并重新启动，可能中断其他客户端和进行中的对话。确认没有其他人在使用后再继续。普通测试连接不会执行此操作。';
+  String get remoteRestartManagedWarning => '这会断开当前连接，并重新探测电脑上已运行的 DSH；不会启动或重启它。普通测试连接不会执行此操作。';
 
   @override
-  String get remoteErrSharedInstance =>
-      '远端托管 DSH 仍在运行，但启动命令不同或缺少有效启动日志。为保护共享实例，未自动重启；请检查配置，改用“只连接”，或在编辑主机中明确选择“重启托管 DSH”。';
+  String get remoteErrSharedInstance => '远端 DSH 仍在运行，但缺少有效的启动日志。请改用“只连接”，或在电脑上重新启动 dsh 后再连接。';
 
   @override
   String get remoteErrAttachSettings => '请填写有效的远端 DSH 端口和登录令牌';
@@ -17129,7 +17137,7 @@ class L10nZh extends L10n {
   String get remoteStepVerifyHostKey => '验证主机指纹';
 
   @override
-  String get remoteStepStartDsh => '启动 DSH';
+  String get remoteStepStartDsh => '查找 DSH';
 
   @override
   String get remoteStepTunnel => '建立隧道';
@@ -17283,7 +17291,7 @@ class L10nZh extends L10n {
   String get remoteDshStarted => '已在远端启动 DSH';
 
   @override
-  String get remoteErrDshTokenRejected => '远端 DSH 拒绝了登录令牌，未自动重启；请检查令牌，或在编辑主机中明确重启托管实例';
+  String get remoteErrDshTokenRejected => '远端 DSH 拒绝了登录令牌；请检查电脑上 dsh 的启动参数，或改用“只连接”';
 
   @override
   String get remoteErrDshSignIn => '没能登录远端 DSH';
@@ -17296,6 +17304,11 @@ class L10nZh extends L10n {
 
   @override
   String get remoteErrDshStopped => '远端 DSH 已停止运行';
+
+  @override
+  String remoteErrDshNotRunning(int port) {
+    return '电脑上的 dsh 没在运行：请先在电脑上启动它（默认端口 $port），再回来连接';
+  }
 
   @override
   String get remoteErrSshDisconnected => 'SSH 连接已断开';
@@ -21303,6 +21316,9 @@ class L10nZh extends L10n {
 
   @override
   String get stateChatTurnEnded => '这一轮已经结束，消息会作为新一轮发送';
+
+  @override
+  String get stateChatSteerTooLate => '这一轮已来不及插话，消息仍在排队';
 
   @override
   String get stateChatSteerFailed => '插话失败';

@@ -90,7 +90,7 @@ void main() {
     expect(h.state.pending.single.isBackgroundTask, isFalse);
     expect(find.byType(UserBubble), findsOneWidget);
     expect(find.byType(BackgroundTaskNotice), findsNothing);
-    expect(find.text('立即发送'), findsOneWidget);
+    expect(find.text('停止并发送'), findsOneWidget);
     expect(await h.chat.withdrawQueued(h.state.pending.single), isTrue);
     expect(h.client.calls, ['remove:notice-1']);
   });
@@ -115,7 +115,7 @@ void main() {
     expect(h.state.pending, hasLength(1));
     expect(h.state.pending.single.sourceKind, 'user');
     expect(h.state.pending.single.inboxId, 'notice-1');
-    expect(find.text('立即发送'), findsOneWidget);
+    expect(find.text('停止并发送'), findsOneWidget);
   });
 
   testWidgets('producer branch takes precedence over a reply-marker body', (tester) async {
@@ -286,8 +286,8 @@ void main() {
       await pumpFrames(tester);
       expect(find.byType(BackgroundTaskNotice), findsOneWidget);
       expect(find.text('撤回'), findsNothing);
-      expect(find.text('改为插话'), findsNothing);
-      expect(find.text('立即发送'), findsNothing);
+      expect(find.text('插话发送'), findsNothing);
+      expect(find.text('停止并发送'), findsNothing);
       if (draft.isNotEmpty) {
         await tester.enterText(find.byType(TextField), draft);
         await pumpFrames(tester, 2);

@@ -114,7 +114,7 @@ void main() {
       );
       final container = await _screen(tester, chat);
       if (sendNow) {
-        await tester.tap(find.text('立即发送'));
+        await tester.tap(find.text('停止并发送'));
       } else {
         await tester.tap(find.byIcon(AppIcons.stopGenerating));
       }

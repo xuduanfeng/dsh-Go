@@ -656,7 +656,8 @@ void main() {
     h.running(true);
     await h.settle(tester);
     expect(find.text('排队中 · 本轮结束后发送'), findsOneWidget);
-    expect(find.text('立即发送'), findsOneWidget);
+    expect(find.text('插话发送'), findsOneWidget);
+    expect(find.text('停止并发送'), findsOneWidget);
     expect(find.text('撤回'), findsOneWidget);
 
     // As app.dart does: switch, then rebuild every element (no inherited
@@ -670,7 +671,8 @@ void main() {
     tester.binding.rootElement!.visitChildren(mark);
     await tester.pump();
     expect(find.text('Queued · Next turn'), findsOneWidget);
-    expect(find.text('Send now'), findsOneWidget);
+    expect(find.text('Steer in'), findsOneWidget);
+    expect(find.text('Stop and send'), findsOneWidget);
     expect(find.text('Undo'), findsOneWidget);
     expect(find.text('撤回'), findsNothing);
   });

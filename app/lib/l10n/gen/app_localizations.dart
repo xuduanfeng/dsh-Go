@@ -7076,6 +7076,18 @@ abstract class L10n {
   /// **'改为插话'**
   String get chatSwitchToSteer;
 
+  /// No description provided for @chatSteerSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'插话发送'**
+  String get chatSteerSend;
+
+  /// No description provided for @chatStopAndSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止并发送'**
+  String get chatStopAndSend;
+
   /// No description provided for @chatWithdraw.
   ///
   /// In zh, this message translates to:
@@ -30678,6 +30690,12 @@ abstract class L10n {
   /// **'面板'**
   String get plugslotsSurfacePanel;
 
+  /// No description provided for @plugslotsSurfaceComposerBanner.
+  ///
+  /// In zh, this message translates to:
+  /// **'提示卡'**
+  String get plugslotsSurfaceComposerBanner;
+
   /// No description provided for @plugslotsNativeUi.
   ///
   /// In zh, this message translates to:
@@ -31425,7 +31443,7 @@ abstract class L10n {
   /// No description provided for @remoteManaged.
   ///
   /// In zh, this message translates to:
-  /// **'托管启动'**
+  /// **'托管复用'**
   String get remoteManaged;
 
   /// No description provided for @remoteAttachOnly.
@@ -31437,7 +31455,7 @@ abstract class L10n {
   /// No description provided for @remoteManagedHelp.
   ///
   /// In zh, this message translates to:
-  /// **'自动启动或复用 App 托管的 DSH；不会自动替换存活但无法复用的实例。'**
+  /// **'复用电脑上已运行的 DSH；不会启动、停止或重启它。'**
   String get remoteManagedHelp;
 
   /// No description provided for @remoteAttachOnlyHelp.
@@ -31485,19 +31503,19 @@ abstract class L10n {
   /// No description provided for @remoteRestartManaged.
   ///
   /// In zh, this message translates to:
-  /// **'重启托管 DSH'**
+  /// **'重新检测 DSH'**
   String get remoteRestartManaged;
 
   /// No description provided for @remoteRestartManagedWarning.
   ///
   /// In zh, this message translates to:
-  /// **'这会停止 App 记录的远端 DSH 并重新启动，可能中断其他客户端和进行中的对话。确认没有其他人在使用后再继续。普通测试连接不会执行此操作。'**
+  /// **'这会断开当前连接，并重新探测电脑上已运行的 DSH；不会启动或重启它。普通测试连接不会执行此操作。'**
   String get remoteRestartManagedWarning;
 
   /// No description provided for @remoteErrSharedInstance.
   ///
   /// In zh, this message translates to:
-  /// **'远端托管 DSH 仍在运行，但启动命令不同或缺少有效启动日志。为保护共享实例，未自动重启；请检查配置，改用“只连接”，或在编辑主机中明确选择“重启托管 DSH”。'**
+  /// **'远端 DSH 仍在运行，但缺少有效的启动日志。请改用“只连接”，或在电脑上重新启动 dsh 后再连接。'**
   String get remoteErrSharedInstance;
 
   /// No description provided for @remoteErrAttachSettings.
@@ -31545,7 +31563,7 @@ abstract class L10n {
   /// No description provided for @remoteStepStartDsh.
   ///
   /// In zh, this message translates to:
-  /// **'启动 DSH'**
+  /// **'查找 DSH'**
   String get remoteStepStartDsh;
 
   /// No description provided for @remoteStepTunnel.
@@ -31833,7 +31851,7 @@ abstract class L10n {
   /// No description provided for @remoteErrDshTokenRejected.
   ///
   /// In zh, this message translates to:
-  /// **'远端 DSH 拒绝了登录令牌，未自动重启；请检查令牌，或在编辑主机中明确重启托管实例'**
+  /// **'远端 DSH 拒绝了登录令牌；请检查电脑上 dsh 的启动参数，或改用“只连接”'**
   String get remoteErrDshTokenRejected;
 
   /// No description provided for @remoteErrDshSignIn.
@@ -31859,6 +31877,12 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'远端 DSH 已停止运行'**
   String get remoteErrDshStopped;
+
+  /// Nothing is listening as dsh web on the computer; dsh-Go never starts one.
+  ///
+  /// In zh, this message translates to:
+  /// **'电脑上的 dsh 没在运行：请先在电脑上启动它（默认端口 {port}），再回来连接'**
+  String remoteErrDshNotRunning(int port);
 
   /// No description provided for @remoteErrSshDisconnected.
   ///
@@ -39245,6 +39269,12 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'这一轮已经结束，消息会作为新一轮发送'**
   String get stateChatTurnEnded;
+
+  /// No description provided for @stateChatSteerTooLate.
+  ///
+  /// In zh, this message translates to:
+  /// **'这一轮已来不及插话，消息仍在排队'**
+  String get stateChatSteerTooLate;
 
   /// No description provided for @stateChatSteerFailed.
   ///

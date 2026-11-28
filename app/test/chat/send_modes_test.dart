@@ -104,9 +104,9 @@ void main() {
     );
     await pumpScreen(tester, harness);
     expect(find.text('排队中 · 本轮结束后发送'), findsOneWidget);
-    expect(pendingActions(tester), ['立即发送', '改为插话', '撤回']);
+    expect(pendingActions(tester), ['插话发送', '停止并发送', '撤回']);
 
-    await tester.tap(find.text('改为插话'));
+    await tester.tap(find.text('插话发送'));
     await pumpFrames(tester);
     final c = harness.controllers['s1']!;
     expect(c.steered, ['r1']);
@@ -120,7 +120,7 @@ void main() {
     expect(find.text('已撤回，可修改后再发'), findsOneWidget);
   });
 
-  testWidgets('a steering message says the agent will see it next, no 改为插话', (tester) async {
+  testWidgets('a steering message says the agent will see it next, with no stop', (tester) async {
     final harness = ChatHarness(
       session: 's1',
       states: {
@@ -129,11 +129,11 @@ void main() {
     );
     await pumpScreen(tester, harness);
     expect(find.text('插话 · 下一步生效'), findsOneWidget);
-    expect(pendingActions(tester), ['立即发送', '撤回']);
+    expect(pendingActions(tester), ['撤回']);
 
-    await tester.tap(find.text('立即发送'));
+    await tester.tap(find.text('撤回'));
     await pumpFrames(tester);
-    expect(harness.controllers['s1']!.sentNow, ['r2']);
+    expect(harness.controllers['s1']!.withdrawn, ['r2']);
   });
 
   testWidgets('left in the inbox with no turn running: 未发送, 发送 / 撤回', (tester) async {
@@ -156,7 +156,7 @@ void main() {
     expect(harness.controllers['s1']!.sentNow, ['r4']);
   });
 
-  testWidgets('sent elsewhere with attachments: no 立即发送', (tester) async {
+  testWidgets('sent elsewhere with attachments: no stop-and-send', (tester) async {
     final harness = ChatHarness(
       session: 's1',
       states: {
@@ -166,7 +166,7 @@ void main() {
       },
     );
     await pumpScreen(tester, harness);
-    expect(pendingActions(tester), ['改为插话', '撤回']);
+    expect(pendingActions(tester), ['插话发送', '撤回']);
   });
 
   testWidgets('before the Host reports it, a bubble has no actions', (tester) async {

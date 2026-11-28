@@ -1236,7 +1236,12 @@ class _ChatListState extends ConsumerState<ChatList> with SingleTickerProviderSt
         // In the turn already: no action here may stop it, so no 「停止并发送」.
         if (canAct && _running && prompt.slot == InboxSlot.nextTurn)
           (appL10n.chatSteerSend, () => chat.steerQueued(prompt)),
-        if (canAct && prompt.resendable && widget.onSendNow != null && prompt.slot != InboxSlot.nextStep)
+        // While a turn runs, a next-step prompt must not offer anything that stops it;
+        // once nothing runs, 发送 is the only way to get it moving again.
+        if (canAct &&
+            prompt.resendable &&
+            widget.onSendNow != null &&
+            !(_running && prompt.slot == InboxSlot.nextStep))
           (_running ? appL10n.chatStopAndSend : appL10n.commonSend, () => widget.onSendNow!(prompt)),
         if (canAct && widget.onWithdraw != null) (appL10n.chatWithdraw, () => widget.onWithdraw!(prompt)),
       ],

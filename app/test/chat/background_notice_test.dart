@@ -28,7 +28,7 @@ void main() {
             expect(find.byType(UserBubble), findsNothing);
             expect(find.text('后台任务通知'), findsOneWidget);
             expect(find.text(backgroundNoticeBody), findsNothing);
-            for (final action in ['立即发送', '发送', '改为插话', '撤回']) {
+            for (final action in ['插话发送', '停止并发送', '发送', '撤回']) {
               expect(find.text(action), findsNothing);
             }
             expect(find.bySemanticsLabel(RegExp(r'^我(?:\n|$)')), findsNothing);
@@ -74,11 +74,11 @@ void main() {
     expect(find.byType(UserBubble), findsOneWidget);
     expect(find.text('后台任务通知'), findsNothing);
     expect(h.state.pending.single.resendable, isTrue);
-    for (final action in ['立即发送', '改为插话', '撤回']) {
+    for (final action in ['插话发送', '停止并发送', '撤回']) {
       expect(find.text(action), findsOneWidget);
     }
-    await tester.tap(find.text('立即发送'));
-    await tester.tap(find.text('改为插话'));
+    await tester.tap(find.text('停止并发送'));
+    await tester.tap(find.text('插话发送'));
     await tester.tap(find.text('撤回'));
     await h.settle(tester);
     expect(h.sentNow.single.text, backgroundNoticeBody);
@@ -101,8 +101,8 @@ void main() {
       expect(find.byType(UserBubble), findsOneWidget);
       expect(find.text('后台任务通知'), findsNothing);
       expect(find.text('后台任务消息'), findsNothing);
-      expect(find.text('立即发送'), findsNothing);
-      expect(find.text('改为插话'), findsOneWidget);
+      expect(find.text('停止并发送'), findsNothing);
+      expect(find.text('插话发送'), findsOneWidget);
       expect(find.text('撤回'), findsOneWidget);
       expect(await h.chat.steerQueued(h.state.pending.single), isTrue);
       expect(await h.chat.withdrawQueued(h.state.pending.single), isTrue);

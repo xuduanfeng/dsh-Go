@@ -47,7 +47,7 @@ void main() {
         expect(find.byType(UserBubble), findsNothing);
         expect(find.byType(BackgroundTaskNotice), findsNothing);
         expect(find.text(text), findsNothing);
-        for (final label in ['未发送', '撤回', '立即发送', '发送', '改为插话']) {
+        for (final label in ['未发送', '撤回', '插话发送', '停止并发送', '发送']) {
           expect(find.text(label), findsNothing);
         }
         expect(h.client.calls, isEmpty);

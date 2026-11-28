@@ -7,7 +7,6 @@
 
 import 'dart:io';
 
-import 'package:dsh_app/remote/link_status.dart';
 import 'package:dsh_app/remote/ssh/remote_bootstrap.dart';
 import 'package:dsh_app/remote/ssh/remote_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,14 +167,11 @@ DSHAPP token foreign-tok
     });
 
     test('a dsh started elsewhere is reused with its port and fresh log token', () async {
-      final foreign = await Process.start('${bin.path}/dsh', [
-        'web',
-        '--host',
-        '127.0.0.1',
-        '--port',
-        '43210',
-        '--no-open',
-      ]);
+      final foreign = await Process.start(
+        '${bin.path}/dsh',
+        ['web', '--host', '127.0.0.1', '--port', '43210', '--no-open'],
+        environment: env,
+      );
       addTearDown(foreign.kill);
       await waitForArgsFile();
       final logs = Directory('${home.path}/.dsh/logs')..createSync(recursive: true);
