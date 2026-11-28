@@ -2,6 +2,12 @@
 # where oh-flutter publishes its AOT tools (app/ohos/README.md). Needs no secrets:
 # packaging and signing a HAP is a later job, once Command Line Tools and a
 # signing profile exist.
+#
+# 2026-11-28: a `gate` job now compares the AOT inputs against the last successful
+# run. When nothing that reaches app.so or flutter_assets changed (docs, tests,
+# workflow edits, native-only commits), the macOS compile is skipped and the
+# previous artifact is re-uploaded under the current sha, so `ohos-aot-<sha>`
+# always exists for the local packaging scripts.
 name: OHOS compile
 
 # On main it runs after a merge, not on pull requests, so no PR waits for the macOS runner;
@@ -18,13 +24,126 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ohos-compile-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Decide whether the macOS compile is worth it, before touching the macOS pool.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.decide.outputs.needed }}
+      base_run: ${{ steps.decide.outputs.base_run }}
+      base_sha: ${{ steps.decide.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Compare AOT inputs with the last successful run
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          # Fail open: anything unexpected means "compile", never a silent skip.
+          needed=true
+          base_run=""
+          base_sha=""
+
+          # Prefer the same branch; fall back to any branch (the app tree is shared).
+          runs_of() {
+            gh api --method GET \
+              "/repos/$GITHUB_REPOSITORY/actions/workflows/ohos-compile.yml/runs" \
+              "$@" -f status=success -f per_page=10 \
+              --jq '.workflow_runs[] | [.id, .head_sha] | @tsv' 2>/dev/null || true
+          }
+          rows="$(runs_of -f branch="$GITHUB_REF_NAME")"
+          if [ -z "$rows" ]; then
+            rows="$(runs_of)"
+          fi
+
+          while IFS=$'\t' read -r id sha; do
+            [ -n "${id:-}" ] || continue
+            hit="$(gh api \
+              "/repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" 2>/dev/null \
+              | jq --arg n "ohos-aot-$sha" \
+                  '[.artifacts[] | select(.name == $n and .expired == false)] | length' \
+                  2>/dev/null || echo 0)"
+            if [ "${hit:-0}" != "0" ]; then
+              base_run="$id"
+              base_sha="$sha"
+              break
+            fi
+          done <<< "$rows"
+
+          if [ -n "$base_sha" ]; then
+            # Shallow clone: bring the base commit's tree in on demand.
+            if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+              git fetch --quiet --depth=1 origin "$base_sha" 2>/dev/null || true
+            fi
+            # Everything below feeds app.so or flutter_assets. The three excluded
+            # asset trees are not declared in app/pubspec.yaml and never reach the
+            # bundle (they are inputs to the icon/tile generators, whose outputs
+            # live in app/ohos or app/lib and do count above).
+            if git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+              if git diff --quiet "$base_sha" HEAD -- \
+                  app/lib \
+                  app/assets \
+                  app/pubspec.yaml \
+                  app/pubspec.lock \
+                  app/ohos/pubspec_overrides.ohos.yaml \
+                  packages \
+                  tooling/ohos/patch_framework.py \
+                  tooling/ohos/vendor_platform_switches.py \
+                  ':(exclude)app/assets/brand' \
+                  ':(exclude)app/assets/tiles/duotone' \
+                  ':(exclude)app/assets/tiles/geometric'; then
+                needed=false
+              fi
+            else
+              echo "base commit $base_sha is not in this clone; compiling"
+            fi
+          else
+            echo "no successful run with a live artifact; compiling"
+          fi
+
+          echo "needed=$needed"     >> "$GITHUB_OUTPUT"
+          echo "base_run=$base_run" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "decision: needed=$needed base=${base_sha:-none}"
+
+  # The inputs did not change: republish the previous artifact under today's sha,
+  # so tooling/ohos/aot-ensure.sh and the local packaging chain keep finding
+  # ohos-aot-<sha>. Costs ~30 s on ubuntu instead of 10–30 min on macOS.
+  reuse:
+    needs: gate
+    if: needs.gate.outputs.needed == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the previous artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ needs.gate.outputs.base_run }}" \
+            -n "ohos-aot-${{ needs.gate.outputs.base_sha }}" \
+            -D "$GITHUB_WORKSPACE"
+
+      - name: Keep the compiled app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ohos-aot-${{ github.sha }}
+          path: app/build/ohos-aot
+          if-no-files-found: error
+          retention-days: 14
+
   compile:
+    needs: gate
+    if: needs.gate.outputs.needed == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     env:
