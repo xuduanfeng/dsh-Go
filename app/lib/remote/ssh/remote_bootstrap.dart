@@ -110,8 +110,13 @@ class RemoteDshBootstrap {
   /// it can read a token for. Never calls a start command.
   /// [onDetail] receives short progress notes for the UI.
   Future<RemoteDshEndpoint> ensureAttached({void Function(String)? onDetail}) async {
-    final probe = await this.probe();
-    if (probe.reusable) {
+    RemoteProbe? probe;
+    try {
+      probe = await this.probe();
+    } catch (_) {
+      probe = null;
+    }
+    if (probe != null && probe.reusable) {
       final url = DshLaunchUrl.tryParse(probe.launchLine!)!;
       onDetail?.call(appL10n.remoteBootstrapReusePort(url.baseUri.port));
       return RemoteDshEndpoint(
@@ -122,18 +127,51 @@ class RemoteDshBootstrap {
         home: probe.home,
       );
     }
-    final result = await shell.run(foreignProbeScript(), timeout: const Duration(seconds: 20));
-    if (_missingShell(result)) throw _noShell(result);
-    final found = parseForeignProbe(result.stdout, home: probe.home);
-    if (found == null) {
-      final stderr = result.stderr.trim();
+
+    RemoteExecResult? posix;
+    try {
+      posix = await shell.run(foreignProbeScript(), timeout: const Duration(seconds: 20));
+    } catch (_) {
+      posix = null;
+    }
+    if (posix != null && posix.stdout.contains(_tag)) {
+      final found = parseForeignProbe(posix.stdout, home: probe?.home);
+      if (found != null) {
+        onDetail?.call(appL10n.remoteBootstrapReusePort(found.port));
+        return found;
+      }
+      final stderr = posix.stderr.trim();
       throw RemoteDshNotRunning(
         port: defaultPort,
         detail: stderr.isEmpty ? null : redactTokens(stderr.split('\n').take(4).join('\n')),
       );
     }
-    onDetail?.call(appL10n.remoteBootstrapReusePort(found.port));
-    return found;
+
+    // No POSIX output: Windows OpenSSH runs `cmd.exe` unless `DefaultShell` was
+    // changed. There the launch log is the only place `dsh web` leaves its
+    // port and token.
+    RemoteExecResult? win;
+    try {
+      win = await shell.run(windowsProbeScript(), timeout: const Duration(seconds: 20));
+    } catch (_) {
+      win = null;
+    }
+    if (win != null) {
+      final found = parseWindowsProbe(win.stdout, home: probe?.home);
+      if (found != null) {
+        onDetail?.call(appL10n.remoteBootstrapReusePort(found.port));
+        return found;
+      }
+      if (_looksLikeCmd(win.stdout)) {
+        throw RemoteDshNotRunning(port: defaultPort);
+      }
+    }
+    if (posix != null && _missingShell(posix)) throw _noShell(posix);
+    final stderr = (win?.stderr ?? posix?.stderr ?? '').trim();
+    throw RemoteDshNotRunning(
+      port: defaultPort,
+      detail: stderr.isEmpty ? null : redactTokens(stderr.split('\n').take(4).join('\n')),
+    );
   }
 
   Future<RemoteProbe> probe() async {
@@ -210,6 +248,45 @@ ours() {
   /// at or after the process started minus two minutes, so a previous process's
   /// token can't be mistaken for this one's.
   String foreignProbeScript() => '${_prelude()}$_foreignProbeScript';
+
+  /// Windows OpenSSH runs `cmd.exe` unless `DefaultShell` points at something
+  /// POSIX; that shell has none of the tools the other probes use, so the port
+  /// and token come from the launch log instead.
+  // One line: `cmd /c` executes the first line only when a command carries
+  // newlines, so the pieces are joined with `&`.
+  String windowsProbeScript() => 'echo DSHAPP-cmd %COMSPEC% & '
+      'echo DSHAPP home %USERPROFILE% & '
+      r'type "%USERPROFILE%\.dsh\logs\dsh-web.log" 2>nul | findstr /i "token="';
+
+  static bool _looksLikeCmd(String stdout) =>
+      RegExp(r'^DSHAPP-cmd .*cmd\.exe', multiLine: true, caseSensitive: false).hasMatch(stdout);
+
+  /// The last `token=` URL in `~/.dsh/logs/dsh-web.log`.
+  ///
+  /// `dsh-web.log` belongs to the running instance; the dated
+  /// `dsh-web-<stamp>.log` files are archives whose tokens died with their
+  /// process (a 401, not a reuse).
+  static RemoteDshEndpoint? parseWindowsProbe(String stdout, {String? home}) {
+    String? resolvedHome = home;
+    String? line;
+    for (final raw in stdout.split('\n')) {
+      final text = raw.trim();
+      if (text.startsWith('DSHAPP home ')) {
+        final value = text.substring('DSHAPP home '.length).trim();
+        if (value.isNotEmpty && !value.contains('%')) resolvedHome = value;
+        continue;
+      }
+      if (DshLaunchUrl.tryParse(text) != null) line = text;
+    }
+    final url = line == null ? null : DshLaunchUrl.tryParse(line);
+    if (url == null) return null;
+    return RemoteDshEndpoint(
+      port: url.baseUri.port,
+      token: url.token,
+      reused: true,
+      home: resolvedHome,
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Parsing (static: unit-tested without a shell).
