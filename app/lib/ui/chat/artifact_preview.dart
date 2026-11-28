@@ -1815,6 +1815,14 @@ class _PdfPage extends StatefulWidget {
 
 class _PdfPageState extends State<_PdfPage> {
   late final Future<Uint8List> _png = widget.channel.pdfPage(widget.path, widget.index, widget.pixels);
+  MemoryImage? _image;
+
+  @override
+  void dispose() {
+    // Rendering this page again produces new PNG bytes and a different cache key.
+    if (_image case final image?) PaintingBinding.instance.imageCache.evict(image, includeLive: false);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1831,8 +1839,8 @@ class _PdfPageState extends State<_PdfPage> {
           if (bytes == null || bytes.isEmpty) {
             return snapshot.hasError ? const Center(child: Icon(AppIcons.imageBroken)) : const SizedBox.expand();
           }
-          return Image.memory(
-            bytes,
+          return Image(
+            image: _image ??= MemoryImage(bytes),
             fit: BoxFit.contain,
             gaplessPlayback: true,
             semanticLabel: l10n.viewArtifactPage(widget.index + 1),
