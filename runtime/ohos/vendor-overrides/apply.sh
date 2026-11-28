@@ -23,6 +23,6 @@ else
   shasum -a 256 -c SHA256SUMS >/dev/null
 fi
 
-cp -R "$here/node_modules/." "$tree/node_modules/"
+cp -R --remove-destination "$here/node_modules/." "$tree/node_modules/"
 
 echo "applied $(find "$here/node_modules" -type f | wc -l | tr -d ' ') vendor override(s) to $tree"
