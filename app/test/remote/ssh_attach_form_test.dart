@@ -41,7 +41,7 @@ void main() {
     final config = sampleSsh.copyWith(dshMode: SshDshMode.attachOnly, remotePort: 4080);
     final container = await pump(tester, config, server);
     expect(find.text('启动命令'), findsNothing);
-    expect(find.text('重启托管 DSH'), findsNothing);
+    expect(find.text('重新检测 DSH'), findsNothing);
     await tester.tap(find.widgetWithText(FilledButton, '测试连接'));
     await tester.pumpAndSettle();
     expect(server.connects, isEmpty);
@@ -65,11 +65,11 @@ void main() {
     expect(raw, isNot(contains('synthetic-token')));
   });
 
-  testWidgets('managed restart requires a separate confirmation and normal test never kills', (tester) async {
+  testWidgets('managed restart only re-probes and normal test never kills', (tester) async {
     final server = FakeSshServer();
-    server.remote.dshInstalled = false;
+    server.remote.pid = null;
     await pump(tester, sampleSsh, server);
-    final restart = find.widgetWithText(TextButton, '重启托管 DSH');
+    final restart = find.widgetWithText(TextButton, '重新检测 DSH');
     await tester.ensureVisible(restart);
     await tester.pumpAndSettle();
     await tester.tap(restart);
@@ -83,8 +83,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '测试连接'));
     await tester.pump();
     expect(server.connects, hasLength(1), reason: 'normal test reached the fake SSH transport');
-    expect(server.last.scripts, hasLength(2), reason: 'normal test completed probe and start');
-    expect(server.last.isClosed, isTrue, reason: 'nodsh terminated the SSH connection');
+    expect(server.last.scripts, hasLength(2), reason: 'normal test completed both probes');
+    expect(server.last.scripts.any((script) => script.contains('nohup')), isFalse);
     final progress = tester.widget<LinkProgressCard>(find.byType(LinkProgressCard));
     expect(progress.status.phase, HostLinkPhase.failed, reason: 'last step: ${progress.status.step}');
     // Subscription cancellation resumes outside FakeAsync; yield a real event
@@ -99,9 +99,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(restart);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '重启托管 DSH'));
+    await tester.tap(find.widgetWithText(FilledButton, '重新检测 DSH'));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pumpAndSettle();
-    expect(server.last.scripts.single, contains(r'kill "$P"'));
+    expect(server.remote.launches, 0);
+    expect(server.transports.expand((t) => t.scripts).any((s) => s.contains('nohup')), isFalse);
+    expect(server.transports.expand((t) => t.scripts).any((s) => s.contains(r'kill "$P"')), isFalse);
   });
 }

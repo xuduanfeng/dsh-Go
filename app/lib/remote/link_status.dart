@@ -92,6 +92,9 @@ enum HostLinkErrorKind {
   hostKeyUnverified,
   noShell,
   dshNotFound,
+  /// Nothing is listening as `dsh web` on the computer, and dsh-Go never
+  /// starts one; the person has to start it there.
+  dshNotRunning,
   dshStartFailed,
   dshTimeout,
   tunnelFailed,

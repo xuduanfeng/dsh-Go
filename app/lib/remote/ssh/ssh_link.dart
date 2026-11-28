@@ -112,7 +112,6 @@ class SshHostLink implements HostLink {
   bool _closed = false;
   bool _recovering = false;
   bool _needsRelogin = false;
-  bool _forceRestart = false;
 
   SshHostConfig get config => _config;
 
@@ -199,8 +198,6 @@ class SshHostLink implements HostLink {
   /// One full attempt. Reuses the forwarder and, when the remote endpoint is
   /// unchanged, the existing DshClient.
   Future<DshClient> _connectOnce() async {
-    final restart = _forceRestart;
-    _forceRestart = false; // One explicit action authorizes only this attempt, even if SSH fails.
     var step = _status.withStep(HostLinkStep.connect);
     void at(HostLinkStep s, {String? detail}) {
       step = step.withStep(s, detail: detail);
@@ -255,15 +252,18 @@ class SshHostLink implements HostLink {
         // Attach-only never executes a remote command or touches managed state.
         endpoint = RemoteDshEndpoint(port: _config.remotePort, token: token, reused: true);
       } else {
-        endpoint = await RemoteDshBootstrap(
-          transport,
-          launchCommand: _config.launchCommand,
-          workingDirectory: _config.workingDirectory,
-          environment: remoteEnvironment,
-        ).ensureRunning(
-          forceRestart: restart,
-          onDetail: (d) => at(HostLinkStep.startDsh, detail: d),
-        );
+        try {
+          endpoint = await RemoteDshBootstrap(
+            transport,
+            environment: remoteEnvironment,
+          ).ensureAttached(onDetail: (d) => at(HostLinkStep.startDsh, detail: d));
+        } on RemoteDshNotRunning catch (e) {
+          throw HostLinkError(
+            HostLinkErrorKind.dshNotRunning,
+            e.message,
+            detail: ['127.0.0.1:${e.port}', if (e.detail != null) e.detail!].join('\n'),
+          );
+        }
       }
       _checkOpen();
 
@@ -379,8 +379,8 @@ class SshHostLink implements HostLink {
   }
 
   /// SSH answers but the mux cannot get through: reconnect if the DSH port
-  /// stops answering. Managed mode can replace a dead process; attach-only
-  /// reconnects to the same endpoint without starting anything.
+  /// stops answering. Neither mode starts a replacement: managed mode reports
+  /// [HostLinkErrorKind.dshNotRunning] until someone starts DSH on the computer.
   Future<void> _probeDsh() async {
     final transport = _transport;
     final endpoint = _endpoint;
@@ -392,7 +392,13 @@ class SshHostLink implements HostLink {
     } catch (_) {
       if (!identical(transport, _transport)) return;
       _backoff.reset();
-      _lost(HostLinkError(HostLinkErrorKind.dshStartFailed, appL10n.remoteErrDshStopped, retryable: true));
+      _lost(
+        HostLinkError(
+          HostLinkErrorKind.dshNotRunning,
+          appL10n.remoteErrDshNotRunning(endpoint.port),
+          detail: '127.0.0.1:${endpoint.port}',
+        ),
+      );
     }
   }
 
@@ -543,13 +549,13 @@ class SshHostLink implements HostLink {
     }
   }
 
-  /// Explicitly replaces the managed process, after the UI has asked for consent.
+  /// Re-probes the computer for a running DSH and reconnects. It never starts,
+  /// stops or restarts anything; the name is kept for the existing UI action.
   Future<DshClient> restartManaged() {
     if (_config.dshMode != SshDshMode.managed) {
       return Future.error(StateError('attach-only cannot restart DSH'));
     }
     if (_opening != null || _recovering) return Future.error(StateError('link is busy'));
-    _forceRestart = true;
     _needsRelogin = true;
     _teardownTransport();
     _emit(HostLinkStatus.idle);

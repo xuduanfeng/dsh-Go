@@ -7,50 +7,57 @@ import 'package:dsh_app/remote/ssh/ssh_host_config.dart';
 import 'package:dsh_app/remote/ssh/ssh_transport.dart';
 import 'package:dsh_client/dsh_client.dart';
 
-/// Imitates the remote machine: dsh-app's managed `dsh web` and its log.
+/// Imitates the remote machine: a running `dsh web` (ours or someone else's)
+/// and its log. It never starts one: start scripts are counted and reported,
+/// so a test fails loudly if dsh-Go ever sends one.
 class FakeRemote {
-  int launches = 0;
-  int? pid;
+  /// Live instances that already exist on the "computer".
+  int? pid = 500;
   int port = 40100;
   String token = 'tok-0';
-  bool sameCommand = true;
   bool hasLaunchLine = true;
 
-  /// What `dsh` does when started.
-  bool dshInstalled = true;
+  /// A `dsh web` started outside dsh-Go; adopted when [pid] is null.
+  int? foreignPid;
+  int foreignPort = 40200;
+  String foreignToken = 'foreign-tok';
+
+  /// Number of start scripts received; must stay 0.
+  int launches = 0;
   final List<Object> tunnelErrors = [];
 
-  /// Kills the managed server (reboot / crash).
+  /// Kills the running server (reboot / crash).
   void killServer() => pid = null;
 
   RemoteExecResult run(String script) {
-    if (script.contains('DSHAPP started')) {
-      if (!dshInstalled) return const RemoteExecResult(127, 'DSHAPP home /home/me\nDSHAPP nodsh\n', '');
+    if (script.contains('DSHAPP started') || script.contains('nohup')) {
       launches++;
-      pid = 1000 + launches;
-      port = 40100 + launches;
-      token = 'tok-$launches';
+      return const RemoteExecResult(0, 'DSHAPP home /home/me\n', '');
+    }
+    // The foreign probe prints this literal when nothing was found.
+    if (script.contains('DSHAPP none')) {
+      final other = foreignPid;
       return RemoteExecResult(
         0,
-        'DSHAPP home /home/me\nDSHAPP dsh /usr/bin/dsh\nDSHAPP started $pid\n'
-            'DSHAPP url dsh web: http://127.0.0.1:$port/?token=$token\n',
+        other == null
+            ? 'DSHAPP home /home/me\nDSHAPP none\n'
+            : 'DSHAPP home /home/me\nDSHAPP found port=$foreignPort pid=$other\n'
+                  'DSHAPP token $foreignToken\n',
         '',
       );
     }
-    if (script.contains('DSHAPP alive')) {
-      final alive = pid;
-      return RemoteExecResult(
-        0,
-        alive == null
-            ? 'DSHAPP home /home/me\n'
-            : 'DSHAPP home /home/me\nDSHAPP alive $alive\n'
-                  '${sameCommand ? 'DSHAPP samecmd\n' : ''}'
-                  '${hasLaunchLine ? 'DSHAPP url dsh web: http://127.0.0.1:$port/?token=$token\n' : ''}',
-        '',
-      );
-    }
-    return const RemoteExecResult(0, '', '');
+    final alive = pid;
+    return RemoteExecResult(
+      0,
+      alive == null
+          ? 'DSHAPP home /home/me\n'
+          : 'DSHAPP home /home/me\nDSHAPP alive $alive\n'
+                '${hasLaunchLine ? 'DSHAPP url dsh web: http://127.0.0.1:$port/?token=$token\n' : ''}',
+      '',
+    );
   }
+
+  bool get _foreignTunnelOk => foreignPid != null;
 }
 
 /// In-memory channel; echoes when [echo] is set.
@@ -104,7 +111,9 @@ class FakeTransport implements SshTransport {
   Future<TunnelChannel> openTunnel(String host, int port) async {
     tunnels.add((host, port));
     if (remote.tunnelErrors.isNotEmpty) throw remote.tunnelErrors.removeAt(0);
-    if (remote.pid == null || port != remote.port) throw const TunnelRefused();
+    final ours = remote.pid != null && port == remote.port;
+    final theirs = remote._foreignTunnelOk && port == remote.foreignPort;
+    if (!ours && !theirs) throw const TunnelRefused();
     return FakeChannel(echo: true);
   }
 

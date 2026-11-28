@@ -63,16 +63,17 @@ void main() {
     return l;
   }
 
-  test('a mux stuck reconnecting over live SSH restarts a dead DSH', () async {
+  test('a dead DSH over live SSH ends in dshNotRunning, without starting one', () async {
     final l = link();
-    final original = await l.open();
-    final replaced = l.clients.first;
+    await l.open();
     server.remote.killServer();
-    // The client points at a closed port: its mux keeps retrying, as through a dead tunnel.
-    original.mux.ready().ignore();
-    expect(await replaced.timeout(const Duration(seconds: 5)), isNot(same(original)));
-    expect(server.remote.launches, 2);
-    expect(connector.calls.last.hostHeader, '127.0.0.1:${server.remote.port}');
+    server.last.drop();
+    final failed = await nextStatus(l, (s) => s.phase == HostLinkPhase.failed, what: 'DSH 停止后失败');
+    expect(failed.error?.kind, HostLinkErrorKind.dshNotRunning);
+    expect(failed.error?.retryable, isFalse);
+    expect(failed.error?.detail, contains('127.0.0.1:3080'));
+    expect(server.remote.launches, 0);
+    expect(server.transports.expand((t) => t.scripts).any((s) => s.contains('nohup')), isFalse);
   });
 
   test('a live DSH is left alone while the mux retries', () async {
@@ -83,7 +84,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(server.last.tunnels.length, greaterThan(2));
     expect(server.transports, hasLength(1));
-    expect(server.remote.launches, 1);
+    expect(server.remote.launches, 0, reason: 'never started, reused the live one');
     expect(l.currentClient, same(original));
   });
 
@@ -109,7 +110,7 @@ void main() {
     server.remote.tunnelErrors.addAll(List<Object>.filled(8, StateError('forwarding forbidden')));
     final l = link();
     await expectLater(l.open(), throwsA(isA<HostLinkError>()));
-    expect(server.remote.launches, 1);
+    expect(server.remote.launches, 0);
   });
 
   test('a token rejected by a reused DSH is final and never kills it', () async {
@@ -122,38 +123,49 @@ void main() {
     expect(server.remote.pid, 500);
   });
 
-  for (final missingLog in [false, true]) {
-    test('live but non-reusable process survives (missing log: $missingLog)', () async {
-      server.remote.pid = 500;
-      server.remote.sameCommand = missingLog;
-      server.remote.hasLaunchLine = !missingLog;
-      final l = link();
-      await expectLater(l.open(), throwsA(isA<HostLinkError>().having((e) => e.retryable, 'retryable', isFalse)));
-      expect(server.remote.launches, 0);
-      expect(server.remote.pid, 500);
-      expect(server.last.scripts, hasLength(1));
-      expect(server.last.tunnels, isEmpty);
-    });
-  }
+  test('a live instance without a launch line is reported, not restarted', () async {
+    server.remote.pid = 500;
+    server.remote.hasLaunchLine = false;
+    final l = link();
+    await expectLater(
+      l.open(),
+      throwsA(
+        isA<HostLinkError>()
+            .having((e) => e.kind, 'kind', HostLinkErrorKind.dshNotRunning)
+            .having((e) => e.retryable, 'retryable', isFalse),
+      ),
+    );
+    expect(server.remote.launches, 0);
+    expect(server.remote.pid, 500);
+    // Probe, then the foreign probe; no start script.
+    expect(server.last.scripts, hasLength(2));
+    expect(server.last.tunnels, isEmpty);
+    expect(server.last.scripts.any((s) => s.contains('nohup')), isFalse);
+  });
 
-  test('explicit managed restart replaces a live instance', () async {
+  test('explicit managed restart re-probes the live instance instead of replacing it', () async {
     server.remote.pid = 500;
     final l = link();
     await l.restartManaged();
-    expect(server.remote.launches, 1);
-    expect(server.last.scripts.single, contains('kill "\$P"'));
+    expect(l.status.isConnected, isTrue);
+    expect(server.remote.launches, 0);
+    expect(server.remote.pid, 500);
+    expect(server.last.tunnels, contains(('127.0.0.1', server.remote.port)));
+    expect(server.last.scripts.any((s) => s.contains(r'kill "$P"')), isFalse);
+    expect(server.last.scripts.any((s) => s.contains('nohup')), isFalse);
   });
 
-  test('one restart action is not reused after a transient login failure', () async {
+  test('a restart action survives a transient login failure without starting anything', () async {
     server.remote.pid = 500;
     connector.failNext.add(const DshTransportException('temporary'));
     final l = link();
     await l.restartManaged();
-    expect(server.remote.launches, 1);
-    expect(server.transports.expand((t) => t.scripts).where((s) => s.contains(r'kill "$P"')), hasLength(1));
+    expect(l.status.isConnected, isTrue);
+    expect(server.remote.launches, 0);
+    expect(server.transports.expand((t) => t.scripts).where((s) => s.contains(r'kill "$P"')), isEmpty);
   });
 
-  test('failed SSH authentication consumes restart consent before ordinary open', () async {
+  test('a failed restart action performs no start command before the next open', () async {
     server.remote.pid = 500;
     server.failNext.add(const HostLinkError(HostLinkErrorKind.authFailed, 'denied'));
     final l = link();
@@ -162,10 +174,11 @@ void main() {
     expect(server.remote.pid, 500);
     expect(server.remote.launches, 0);
     expect(server.last.scripts, hasLength(1));
+    expect(server.last.scripts.single, isNot(contains('nohup')));
     expect(server.last.scripts.single, isNot(contains(r'kill "$P"')));
   });
 
-  test('a network retry cannot inherit restart consent from the failed SSH attempt', () async {
+  test('a network retry after a restart action never sends a start script', () async {
     server.remote.pid = 500;
     server.failNext.add(const HostLinkError(HostLinkErrorKind.unreachable, 'offline', retryable: true));
     final l = link();
@@ -173,6 +186,7 @@ void main() {
     expect(server.connects, hasLength(2));
     expect(server.remote.pid, 500);
     expect(server.remote.launches, 0);
+    expect(server.last.scripts.single, isNot(contains('nohup')));
     expect(server.last.scripts.single, isNot(contains(r'kill "$P"')));
   });
 
@@ -237,7 +251,7 @@ void main() {
     expect(
       seen.map((s) => s.step).whereType<HostLinkStep>().toSet().toList(),
       HostLinkStep.values,
-      reason: 'connect → 验证主机指纹 → 启动 DSH → 建立隧道 → 登录',
+      reason: 'connect → 验证主机指纹 → 查找 DSH → 建立隧道 → 登录',
     );
     expect(identical(client, connector.clients.single), isTrue);
     final call = connector.calls.single;
@@ -316,15 +330,23 @@ void main() {
     });
   });
 
-  test('missing dsh is reported at 启动 DSH, without retries', () async {
-    server.remote.dshInstalled = false;
+  test('nothing running is reported at 查找 DSH, without retries', () async {
+    server.remote.pid = null;
     final l = link();
     await expectLater(
       l.open(),
-      throwsA(isA<HostLinkError>().having((e) => e.kind, 'kind', HostLinkErrorKind.dshNotFound)),
+      throwsA(
+        isA<HostLinkError>()
+            .having((e) => e.kind, 'kind', HostLinkErrorKind.dshNotRunning)
+            .having((e) => e.retryable, 'retryable', isFalse)
+            .having((e) => e.message, 'message', contains('3080'))
+            .having((e) => e.detail, 'detail', contains('127.0.0.1:3080')),
+      ),
     );
     expect(l.status.step, HostLinkStep.startDsh);
     expect(server.connects, hasLength(1));
+    expect(server.remote.launches, 0);
+    expect(server.last.tunnels, isEmpty);
   });
 
   test('auth failure is final', () async {
@@ -380,26 +402,30 @@ void main() {
     expect(l.status.isConnected, isTrue);
     expect(identical(l.currentClient, first), isTrue);
     expect(published, isEmpty);
-    expect(server.remote.launches, 1, reason: 'reused the running dsh');
+    expect(server.remote.launches, 0, reason: 'reused the running dsh');
   });
 
-  test('remote dsh restarted: logs in again and publishes the new client', () async {
+  test('an externally restarted DSH is adopted with its new port and token', () async {
     final l = link();
     final first = await l.open();
     final published = <Object>[];
     l.clients.listen(published.add);
 
     final changed = l.clients.first;
-    final connected = nextStatus(l, (s) => s.isConnected, what: 'DSH 重启后连接');
-    server.remote.killServer();
+    final connected = nextStatus(l, (s) => s.isConnected, what: 'DSH 外部重启后连接');
+    server.remote.pid = null;
+    server.remote.foreignPid = 600;
+    server.remote.foreignPort = 40150;
+    server.remote.foreignToken = 'tok-restarted';
     server.last.drop();
     await connected;
     await changed;
 
-    expect(server.remote.launches, 2);
+    expect(server.remote.launches, 0);
     expect(published, hasLength(1));
     expect(identical(published.single, first), isFalse);
-    expect(connector.calls.last.hostHeader, '127.0.0.1:${server.remote.port}');
+    expect(connector.calls.last.hostHeader, '127.0.0.1:40150');
+    expect(connector.calls.last.token, 'tok-restarted');
     expect(
       connector.calls.last.baseUri.port,
       connector.calls.first.baseUri.port,

@@ -20,8 +20,6 @@ import 'dart:io';
 
 import 'package:dsh_app/remote/link_status.dart';
 import 'package:dsh_app/remote/secret_store.dart';
-import 'package:dsh_app/remote/ssh/remote_bootstrap.dart';
-import 'package:dsh_app/remote/ssh/remote_shell.dart';
 import 'package:dsh_app/remote/ssh/ssh_link.dart';
 import 'package:dsh_app/remote/ssh/ssh_transport.dart';
 import 'package:dsh_app/state/connection_state.dart';
@@ -64,8 +62,8 @@ void main() {
     for (final link in links) {
       await link.close();
     }
-    // Stop the dsh web the tests started (same machine, same isolated HOME).
-    await RemoteDshBootstrap(LocalProcessShell(), environment: remoteEnv).stop();
+    // dsh-Go never starts or stops DSH; a live run expects `dsh web` to be
+    // running already (start it yourself in $HOME), so only the temp HOME goes.
     home.deleteSync(recursive: true);
   });
 
