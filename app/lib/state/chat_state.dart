@@ -2029,7 +2029,7 @@ class ChatController extends Notifier<ChatState> {
       final moved = await _promote(operation, prompt);
       state = state.copyWith(
         notice: moved ? appL10n.stateChatTurnEnded : null,
-        error: moved ? null : appL10n.stateChatSendFailed,
+        error: moved ? null : appL10n.stateSendFailed,
       );
       return moved;
     } catch (e) {
