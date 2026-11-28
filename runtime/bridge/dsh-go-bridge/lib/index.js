@@ -33,7 +33,8 @@ import { createRecallCoordinator } from "./companion/recall.js";
 import { createRecallContexts } from "./companion/recall-context.js";
 import { createCompanionSignals } from "./companion/signals.js";
 import { NativeCore } from "./native/core.js";
-import { MANIFEST as COST_MANIFEST, createCostBanner } from "./native/cost-banner.js";
+import { BANNER_ONLY_MANIFEST, MANIFEST as COST_MANIFEST, PANEL_ID, STRIP_ID, NOTE_ID, COPY_ID, createCostBanner } from "./native/cost-banner.js";
+import { createUsageHud } from "./native/usage-hud.js";
 import { effectiveLimits } from "./native/limits.js";
 import { STREAM_PATH, createNativeRoutes } from "./native/routes.js";
 
@@ -281,9 +282,22 @@ export function apply(ctx, config) {
   // Native plugin protocol: the service exists whenever the bridge runs (no cost without plugins).
   // The cost card ships inside the bridge: the phone's engine refuses plugin
   // installation, so a bundled contribution is the only way it reaches it.
-  const builtins = options.native?.costCard === false
-    ? []
-    : [{ pkgJson: COST_MANIFEST, banner: createCostBanner(ctx, { holidays: options.native?.costHolidays }) }];
+  const nativeOptions = options.native ?? {};
+  const builtins = [];
+  if (nativeOptions.costCard !== false) {
+    const holidays = nativeOptions.costHolidays;
+    const hud = nativeOptions.usageHud === false ? undefined : createUsageHud(ctx, { holidays });
+    builtins.push(hud === undefined
+      ? { pkgJson: BANNER_ONLY_MANIFEST, banner: createCostBanner(ctx, { holidays }) }
+      : {
+        pkgJson: COST_MANIFEST,
+        banner: createCostBanner(ctx, { holidays }),
+        strips: { [STRIP_ID]: hud.strip },
+        panels: { [PANEL_ID]: hud.panel },
+        notes: { [NOTE_ID]: hud.note },
+        handlers: { [COPY_ID]: hud.copy },
+      });
+  }
   const native = new NativeCore(ctx, effectiveLimits(options.native), VERSION, builtins);
   ctx.effect(() => () => native.dispose(), "dsh-go-bridge: native core");
   ctx.provide("dshGo", native.service);

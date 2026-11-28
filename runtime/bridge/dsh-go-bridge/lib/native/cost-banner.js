@@ -21,8 +21,8 @@ const ESTIMATE_TOKENS = 3072 / 3;
 
 /** CNY per 1M tokens, off-peak; peak is double. Same table as dsh-cost-meter. */
 const PRICES = {
-  flash: { miss: 1, hit: 0.02 },
-  pro: { miss: 4.5, hit: 0.15 },
+  flash: { miss: 1, hit: 0.02, output: 4 },
+  pro: { miss: 4.5, hit: 0.15, output: 13.5 },
 };
 
 /** Chinese public holidays that fall on a weekday (all-day off-peak). */
@@ -60,7 +60,7 @@ export function priceAt(model, at, holidays) {
   const base = PRICES[familyOf(model)];
   const peak = isPeak(at, holidays);
   const factor = peak ? 2 : 1;
-  return { miss: base.miss * factor, hit: base.hit * factor, peak };
+  return { miss: base.miss * factor, hit: base.hit * factor, output: base.output * factor, peak };
 }
 
 /** `105k`, `8.4k`, `512`. */
@@ -118,16 +118,40 @@ export function cardFor(chat, at, { holidays = DEFAULT_HOLIDAYS, dismissed } = {
 
 export const PKG = 'dsh-go-cost';
 export const BANNER_ID = 'cost';
+export const STRIP_ID = 'strip';
+export const PANEL_ID = 'hud';
+export const NOTE_ID = 'turn';
+export const COPY_ID = 'copy';
 
 /** The package.json shape parseManifest sees for the built-in card. */
 export const MANIFEST = Object.freeze({
   name: PKG,
-  version: '1.0.0',
+  version: '1.1.0',
+  dshGo: {
+    v: 1,
+    title: { zh: '用量与费用', en: 'Usage & cost' },
+    icon: 'coin',
+    wants: [],
+    contributes: {
+      'composer.banner': [{ id: BANNER_ID, icon: 'coin' }],
+      'composer.strip': [{ id: STRIP_ID, icon: 'coin', panel: PANEL_ID }],
+      panels: [{ id: PANEL_ID, title: '用量与费用', icon: 'coin', placement: ['session.tab', 'features', 'chat.panel'] }],
+      'turn.note': [{ id: NOTE_ID }],
+      'composer.actions': [{ id: COPY_ID, label: { zh: '复制用量', en: 'Copy usage' }, icon: 'copy' }],
+    },
+  },
+});
+
+/** The card alone, for a host that switches the HUD off. */
+export const BANNER_ONLY_MANIFEST = Object.freeze({
+  name: PKG,
+  version: '1.1.0',
   dshGo: {
     v: 1,
     title: { zh: '费用提示', en: 'Cost hint' },
-    icon: 'wallet',
-    contributes: { 'composer.banner': [{ id: BANNER_ID, icon: 'wallet' }] },
+    icon: 'coin',
+    wants: [],
+    contributes: { 'composer.banner': [{ id: BANNER_ID, icon: 'coin' }] },
   },
 });
 
@@ -145,8 +169,6 @@ export function createCostBanner(ctx, options = {}) {
   /** sessionId -> buckets the user sent away. */
   const dismissed = new Map();
   const listeners = new Set();
-  /** TEMPORARY (diagnostic build): why a session has no card yet. */
-  const probe = new Map();
 
   const set = (sessionId, value) => {
     chats.set(sessionId, value);
@@ -217,40 +239,27 @@ export function createCostBanner(ctx, options = {}) {
     if (coldTried.has(sessionId)) return;
     coldTried.add(sessionId);
     const query = service('sessionQuery');
-    if (query?.readSession === undefined) {
-      probe.set(sessionId, 'noQuery');
-      return;
-    }
+    if (query?.readSession === undefined) return;
     try {
       const read = await query.readSession(sessionId);
       const events = Array.isArray(read?.events) ? read.events : [];
       for (const event of events) absorb(sessionId, event);
-      probe.set(sessionId, `r${events.length} c${chats.get(sessionId)?.context ?? '-'}`);
-    } catch (error) {
-      probe.set(sessionId, `rERR ${String(error?.message ?? error).slice(0, 30)}`);
+    } catch {
+      // A log that cannot be replayed keeps the card dark until a turn lands.
     }
     for (const notify of listeners) notify(sessionId);
   };
 
   const remember = (session) => {
     if (session === undefined) return;
-    let events = -1;
-    try {
-      const list = typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : undefined;
-      events = Array.isArray(list) ? list.length : -1;
-    } catch {
-      events = -2;
-    }
     const lastEventAt = look(session);
     if (chats.has(session.id)) return;
     let pressureTokens;
     try {
       pressureTokens = service('tokenMeter')?.contextPressure?.(session)?.pressureTokens;
     } catch {
-      probe.set(session.id, `e${events} pERR id${String(session.id).slice(0, 6)}`);
       return;
     }
-    probe.set(session.id, `e${events} p${pressureTokens ?? '-'} id${String(session.id).slice(0, 6)}`);
     if (typeof pressureTokens !== 'number' || !(pressureTokens > 0)) return;
     set(session.id, { context: pressureTokens, lastAt: lastEventAt ?? now() });
   };
@@ -266,10 +275,7 @@ export function createCostBanner(ctx, options = {}) {
     const seen = seenSessions.get(sessionId);
     if (seen !== undefined) return seen;
     const sessions = service('sessions');
-    if (sessions === undefined) {
-      probe.set(sessionId, `noSessions id${String(sessionId).slice(0, 6)}`);
-      return undefined;
-    }
+    if (sessions === undefined) return undefined;
     try {
       const found = sessions.get?.(sessionId);
       if (found !== undefined) return found;
@@ -278,13 +284,10 @@ export function createCostBanner(ctx, options = {}) {
     }
     try {
       const live = sessions.list?.() ?? [];
-      const hit = live.find((candidate) => candidate?.id === sessionId);
-      if (hit !== undefined) return hit;
-      probe.set(sessionId, `n${live.length} miss id${String(sessionId).slice(0, 6)}`);
+      return live.find((candidate) => candidate?.id === sessionId);
     } catch {
-      probe.set(sessionId, `listERR id${String(sessionId).slice(0, 6)}`);
+      return undefined;
     }
-    return undefined;
   };
 
   return {
@@ -295,25 +298,11 @@ export function createCostBanner(ctx, options = {}) {
         if (typeof sessionId !== 'string') return emit(null);
         if (!chats.has(sessionId)) {
           const session = sessionOf(sessionId);
-          if (session === undefined) {
-            if (!probe.has(sessionId)) probe.set(sessionId, 's0');
-            void rememberCold(sessionId);
-          } else {
-            remember(session);
-          }
+          if (session === undefined) void rememberCold(sessionId);
+          else remember(session);
         }
-        const card = cardFor(chats.get(sessionId), now(), { holidays, dismissed: dismissed.get(sessionId) });
-        if (card !== null) return emit(card);
-        // Priced but held back (below the gate, or sent away): nothing to show.
-        if (chats.get(sessionId) !== undefined) return emit(null);
-        const seen = probe.get(sessionId) ?? 's?';
-        const chat = chats.get(sessionId);
-        return emit({
-          text: `[dbg] ${seen} c${chat?.context ?? '-'} t${Math.round((now() % 100000) / 10)}`,
-          note: 'cost-card 诊断版：出现这行说明卡片通道是通的',
-          icon: 'wallet',
-          tone: 'warn',
-        });
+        // A session with nothing priced yet (or one the user sent away) shows no card.
+        return emit(cardFor(chats.get(sessionId), now(), { holidays, dismissed: dismissed.get(sessionId) }));
       };
       push();
       listeners.add(push);

@@ -11,6 +11,7 @@ import { normalizeScope } from "../bridge/dsh-go-bridge/lib/native/util.js";
 import {
   MANIFEST, createCostBanner, cardFor, isPeak, money, priceAt, compact,
 } from "../bridge/dsh-go-bridge/lib/native/cost-banner.js";
+import { createUsageHud, foldLog, turnText } from "../bridge/dsh-go-bridge/lib/native/usage-hud.js";
 
 const BEIJING = 8 * 3600_000;
 const at = (y, m, d, hh, mm) => Date.UTC(y, m - 1, d, hh, mm) - BEIJING;
@@ -64,7 +65,15 @@ async function fixture() {
     logger: { warn() {} },
   };
   const banner = createCostBanner(ctx, { now: () => at(2026, 11, 26, 10, 30) });
-  const core = new NativeCore(ctx, effectiveLimits({}), "test", [{ pkgJson: MANIFEST, banner }]);
+  const hud = createUsageHud(ctx, { now: () => at(2026, 11, 26, 10, 30) });
+  const core = new NativeCore(ctx, effectiveLimits({}), "test", [{
+    pkgJson: MANIFEST,
+    banner,
+    strips: { strip: hud.strip },
+    panels: { hud: hud.panel },
+    notes: { turn: hud.note },
+    handlers: { copy: hud.copy },
+  }]);
   const routes = createNativeRoutes(core);
   const server = createServer((req, res) => {
     const url = new URL(req.url, "http://local");
@@ -90,11 +99,14 @@ async function fixture() {
 test("the bridge ships the card as its own contribution", async (t) => {
   const f = await fixture();
   t.after(() => f.close());
-  const all = await f.get("/dsh-go/v1/contributions?v=1&app=1.3.0&locale=zh-CN&surfaces=composer.actions,message.actions,composer.strip,panels,composer.banner");
+  const all = await f.get("/dsh-go/v1/contributions?v=1&app=1.3.0&locale=zh-CN&surfaces=composer.actions,message.actions,composer.strip,panels,composer.banner,turn.note");
   const row = all.plugins.find((p) => p.pkg === "dsh-go-cost");
   assert.ok(row, `no built-in row: ${JSON.stringify(all.plugins.map((p) => p.pkg))}`);
-  assert.equal(row.title, "费用提示");
-  assert.deepEqual(row.contributes["composer.banner"], [{ id: "cost", icon: "wallet", ready: true, live: true }]);
+  assert.equal(row.title, "用量与费用");
+  assert.deepEqual(row.contributes["composer.banner"], [{ id: "cost", icon: "coin", ready: true, live: true }]);
+  assert.deepEqual(row.contributes["composer.strip"], [{ id: "strip", icon: "coin", text: null, panel: "hud", tappable: true, live: true, ready: true }]);
+  assert.deepEqual(row.contributes.panels.map((p) => [p.id, p.ready]), [["hud", true]]);
+  assert.deepEqual(row.contributes["turn.note"].map((n) => [n.id, n.ready]), [["turn", true]]);
   assert.equal(row.state, "ok");
 });
 

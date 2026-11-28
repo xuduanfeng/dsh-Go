@@ -205,15 +205,34 @@ export class NativeCore {
     return this.scan().plugins.get(pkg) ?? this.builtinPlugins.get(pkg);
   }
 
-  /** A contribution the bridge itself ships (parseManifest shape, no package on disk). */
+  /**
+   * A contribution the bridge itself ships (parseManifest shape, no package on
+   * disk). Each surface binds only the ids it declared and the entry supplies,
+   * so a built-in may carry a banner, a strip, a panel and notes at once.
+   */
   #addBuiltin(entry) {
     const parsed = parseManifest(entry?.pkgJson, undefined);
     if (!parsed.valid) return;
     const rec = { pkg: parsed.pkg, uid: `builtin:${parsed.pkg}`, stamp: "builtin", parsed, dir: undefined, pkgJsonPath: undefined };
     this.builtinPlugins.set(parsed.pkg, rec);
-    for (const it of parsed.items["composer.banner"]) {
-      if (entry.banner?.id === it.id) this.#add(parsed.pkg, "banners", it.id, entry.banner, BUILTIN_TOKEN);
-    }
+    const bind = (surface, kind, defs) => {
+      if (defs === undefined) return;
+      for (const it of parsed.items[surface] ?? []) {
+        const def = defs[it.id];
+        if (def === undefined) continue;
+        // A strip / note holds { data }; a panel holds { view, data, actions }; a handler is the function.
+        const value = kind === "strips" || kind === "notes" ? (typeof def === "function" ? { data: def } : def) : def;
+        if (value === undefined) continue;
+        this.#add(parsed.pkg, kind, it.id, value, BUILTIN_TOKEN);
+      }
+    };
+    // `banner` (singular) is the original form: one card registered under its own id.
+    const banners = entry?.banners ?? (entry?.banner?.id === undefined ? undefined : { [entry.banner.id]: entry.banner });
+    bind("composer.banner", "banners", banners);
+    bind("composer.strip", "strips", entry?.strips);
+    bind("panels", "panels", entry?.panels);
+    bind("turn.note", "notes", entry?.notes);
+    for (const [id, handler] of Object.entries(entry?.handlers ?? {})) this.#add(parsed.pkg, "handlers", id, handler, BUILTIN_TOKEN);
   }
 
   // ---------------------------------------------------------------- state
