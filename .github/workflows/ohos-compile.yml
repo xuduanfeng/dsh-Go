@@ -129,9 +129,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # No checkout in this job, so name the repo explicitly; and upload-artifact
+          # strips the `app/build/ohos-aot` prefix, so unpack it back into that path
+          # or the re-upload below finds nothing.
+          mkdir -p app/build/ohos-aot
           gh run download "${{ needs.gate.outputs.base_run }}" \
+            -R "${{ github.repository }}" \
             -n "ohos-aot-${{ needs.gate.outputs.base_sha }}" \
-            -D "$GITHUB_WORKSPACE"
+            -D app/build/ohos-aot
+          ls app/build/ohos-aot | head
 
       - name: Keep the compiled app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
