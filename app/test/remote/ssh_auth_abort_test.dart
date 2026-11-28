@@ -148,7 +148,7 @@ void main() {
     });
   }
 
-  test('an interrupted reauthentication recreates SSH and reuses the DSH session', () async {
+  test('an interrupted reauthentication recreates SSH and re-attaches to the DSH session', () async {
     final server = FakeSshServer();
     var clientConnections = 0;
     final client = DshClient.withCarrier(_OfflineCarrier());
@@ -187,7 +187,7 @@ void main() {
     expect(link.currentClient, same(original));
     expect(link.localPort, port);
     expect(clientConnections, 1);
-    expect(server.remote.launches, 1);
+    expect(server.remote.launches, 0, reason: 're-attached to the running dsh instead of starting one');
     expect(usedSecrets, hasLength(3));
     expect(usedSecrets.every((secrets) => identical(secrets, _params.secrets)), isTrue);
   });
