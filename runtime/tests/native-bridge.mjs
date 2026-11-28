@@ -24,6 +24,7 @@ const base = new URL(baseArg);
 const USAGE = "dsh-go-fixture-usage";
 const QUICK = "dsh-go-fixture-quick";
 const STATIC = "@dsh-go-fixture/static";
+const BUILTIN = "dsh-go-cost";
 const CAPS = "v=1&app=0.10.0&locale=zh-CN&surfaces=composer.actions,message.actions,composer.strip,panels&components=stack,row,text,metric";
 
 let failed = 0;
@@ -155,9 +156,10 @@ const absentRoute = await get("/dsh-go/v1/unknown-route");
 check(absentRoute.status === 404 && absentRoute.json?.error?.code === "route-not-found", "unknown route has a distinct route-not-found code");
 
 if (EMPTY) {
-  section("no plugin declares dshGo: nothing changes");
+  section("no plugin declares dshGo: only the built-in card remains");
   const r = await contributions();
-  check(r.status === 200 && Array.isArray(r.json?.plugins) && r.json.plugins.length === 0, `contributions -> ${r.status}, plugins ${JSON.stringify(r.json?.plugins)}`);
+  const onlyBuiltin = Array.isArray(r.json?.plugins) && r.json.plugins.length === 1 && r.json.plugins[0]?.pkg === BUILTIN;
+  check(r.status === 200 && onlyBuiltin, `contributions -> ${r.status}, plugins ${JSON.stringify(r.json?.plugins?.map((p) => p.pkg))}`);
   check(r.json?.limits?.viewBytes === 32768 && r.json?.bridge, `limits and bridge ${r.json?.bridge} present`);
   check(r.json?.bridge === bridgeCapabilities.json?.bridge, "capabilities and contributions use the same implementation version");
   const v = await get(`/dsh-go/v1/views/${USAGE}/usage?${CAPS}`);
@@ -195,7 +197,7 @@ check(c1.json?.bridge === bridgeCapabilities.json?.bridge, "capabilities and con
 check(c1.ms < 300, `local round trip ${c1.ms} ms < 300 ms`);
 const plugins = c1.json?.plugins ?? [];
 const pkgs = plugins.map((p) => p.pkg);
-check(pkgs.length === 3 && [USAGE, QUICK, STATIC].every((p) => pkgs.includes(p)), `exactly the three fixtures: ${pkgs.join(", ")}`);
+check(pkgs.length === 4 && [BUILTIN, USAGE, QUICK, STATIC].every((p) => pkgs.includes(p)), `the three fixtures plus the built-in card: ${pkgs.join(", ")}`);
 check(JSON.stringify(pkgs) === JSON.stringify([...pkgs].sort((a, b) => a.localeCompare(b))), "sorted by package name");
 check(c1.headers.etag === `"${c1.json?.rev}"`, `ETag ${c1.headers.etag}`);
 const c304 = await contributions(CAPS, { "if-none-match": c1.headers.etag });
