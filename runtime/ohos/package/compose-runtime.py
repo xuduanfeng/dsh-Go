@@ -61,7 +61,7 @@ def write_zip_file(bundle: zipfile.ZipFile, name: str, source: Path, method: int
     if method == zipfile.ZIP_DEFLATED:
         # Use the public per-member compresslevel API. ZipFile.open(ZipInfo)
         # does not inherit the archive's compresslevel on Python 3.11.
-        bundle.writestr(entry, source.read_bytes(), compress_type=method, compresslevel=9)
+        bundle.writestr(entry, source.read_bytes(), compress_type=method, compresslevel=6)
         return
     # The output is a regular seekable file. ZIP32 headers are updated in place;
     # data descriptors, ZIP64 and encryption are never needed or permitted.
@@ -125,7 +125,7 @@ def write_runtime_archive(expanded: Path, destination: Path):
         raise ValueError('Runtime archive input file set differs from the manifest')
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, 'x', compression=zipfile.ZIP_DEFLATED,
-                         compresslevel=9, allowZip64=False) as bundle:
+                         compresslevel=6, allowZip64=False) as bundle:
         write_zip_file(bundle, 'manifest.json', manifest_path, zipfile.ZIP_STORED)
         for row in rows:
             write_zip_file(bundle, 'files/' + row['path'], expanded / 'files' / row['path'], zipfile.ZIP_DEFLATED)
