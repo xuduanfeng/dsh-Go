@@ -24,6 +24,11 @@ await fs.copyFile(path.join(source, 'RuntimeCore.ets'), corePath);
 await fs.copyFile(path.join(source, 'RuntimePaths.ets'), path.join(temp, 'RuntimePaths.mts'));
 await fs.copyFile(path.join(source, 'RuntimeLifecycle.ets'), path.join(temp, 'RuntimeLifecycle.mts'));
 await prepareManagedSkillModules({ source, directory: temp });
+// The diagnostic sink is a local addition; the controller imports it by module
+// path, so adapt it the same way as the other product modules.
+if (await fs.stat(path.join(source, 'DiagnosticSink.ets')).then(() => true, () => false)) {
+  await fs.copyFile(path.join(source, 'DiagnosticSink.ets'), path.join(temp, 'DiagnosticSink.mts'));
+}
 const fixtureUrl = new URL('./runtime-storage-fixture.mjs', import.meta.url).href;
 // All three archive modules share the same actual RuntimeCore identity used by
 // the Controller and installer. Only unavailable platform imports and type-only
@@ -155,6 +160,7 @@ controllerText = controllerText.replace("import common from '@ohos.app.ability.c
   .replace("from './RuntimePaths'", "from './RuntimePaths.mts'")
   .replace("RuntimeLifecycle, HostLifecycleAck", "RuntimeLifecycle, type HostLifecycleAck")
   .replace("from './RuntimeLifecycle'", "from './RuntimeLifecycle.mts'")
+  .replace("from './DiagnosticSink'", "from './DiagnosticSink.mts'")
   .replace("from './TransientTaskOwner'", "from './TransientTaskOwner.mts'")
   .replace("from './OhosLifecycleTransport'", `from '${hostFixtureUrl}'`)
   .replace('LinuxControl, LinuxRunRequest', 'LinuxControl, type LinuxRunRequest')
