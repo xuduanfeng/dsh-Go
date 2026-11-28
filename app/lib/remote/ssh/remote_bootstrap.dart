@@ -140,16 +140,28 @@ class RemoteDshBootstrap {
         onDetail?.call(appL10n.remoteBootstrapReusePort(found.port));
         return found;
       }
-      final stderr = posix.stderr.trim();
-      throw RemoteDshNotRunning(
-        port: defaultPort,
-        detail: stderr.isEmpty ? null : redactTokens(stderr.split('\n').take(4).join('\n')),
-      );
+      // A shell that answers does not necessarily see native processes: under
+      // Git bash on Windows `ps` lists cygwin ones only, so a desktop
+      // `dsh web` is invisible there. The launch log still names its port and
+      // token, so look there before giving up.
     }
 
-    // No POSIX output: Windows OpenSSH runs `cmd.exe` unless `DefaultShell` was
-    // changed. There the launch log is the only place `dsh web` leaves its
-    // port and token.
+    RemoteExecResult? logged;
+    try {
+      logged = await shell.run(logProbeScript(), timeout: const Duration(seconds: 20));
+    } catch (_) {
+      logged = null;
+    }
+    if (logged != null && logged.stdout.contains(_tag)) {
+      final found = parseWindowsProbe(logged.stdout, home: probe?.home);
+      if (found != null) {
+        onDetail?.call(appL10n.remoteBootstrapReusePort(found.port));
+        return found;
+      }
+    }
+
+    // A real cmd.exe shell (no `sh` at all) has none of the tools above, so
+    // the log is read with cmd syntax.
     RemoteExecResult? win;
     try {
       win = await shell.run(windowsProbeScript(), timeout: const Duration(seconds: 20));
@@ -248,6 +260,17 @@ ours() {
   /// at or after the process started minus two minutes, so a previous process's
   /// token can't be mistaken for this one's.
   String foreignProbeScript() => '${_prelude()}$_foreignProbeScript';
+
+  /// The launch log, read through a POSIX shell (`logProbeScript`).
+  ///
+  /// `dsh-web.log` belongs to the instance that is running; the dated
+  /// `dsh-web-<stamp>.log` files are archives whose tokens died with them.
+  String logProbeScript() => r'''
+P=${USERPROFILE:-$HOME}
+P=$(printf '%s' "$P" | sed 's|\\|/|g')
+printf 'DSHAPP home %s\n' "$P"
+grep -Eo 'http://127\.0\.0\.1:[0-9]+/\?token=[^ ]*' "$P/.dsh/logs/dsh-web.log" 2>/dev/null | tail -n 1
+''';
 
   /// Windows OpenSSH runs `cmd.exe` unless `DefaultShell` points at something
   /// POSIX; that shell has none of the tools the other probes use, so the port
@@ -402,19 +425,19 @@ MATCH=$(ps -A -o pid= -o args= 2>/dev/null | while read -r P A; do
   [ -n "$P" ] || continue
   [ "$P" = "$MY" ] && continue
   case " $A " in
-    *dsh*" web"*--port*) ;;
+    *dsh*" web"*) ;;
     *) continue;;
   esac
   case " $A " in
     *" --port="*) PORT=${A#*--port=}; PORT=${PORT%% *};;
     *" --port "*) PORT=${A#* --port }; PORT=${PORT%% *};;
-    *) continue;;
+    *) PORT=0 ;;
   esac
   case "$PORT" in ''|*[!0-9]*) continue;; esac
   START=$(_start_epoch "$P") || continue
   case "$START" in ''|*[!0-9]*) continue;; esac
   CUT=$((START - 120))
-  LOGS=$(ls -t "$HOME"/.dsh/logs/dsh-web-*.log 2>/dev/null)
+  LOGS=$(ls -t "$HOME"/.dsh/logs/dsh-web.log "$HOME"/.dsh/logs/dsh-web-*.log 2>/dev/null)
   for L in $LOGS; do
     M=$(_log_mtime "$L") || continue
     case "$M" in ''|*[!0-9]*) continue;; esac

@@ -16,6 +16,8 @@
   "chatSending": "Sending",
   "chatSendNow": "Send now",
   "chatSwitchToSteer": "Steer instead",
+  "chatSteerSend": "Steer in",
+  "chatStopAndSend": "Stop and send",
   "chatWithdraw": "Undo",
   "chatContinuedInNewChat": "Continued in a new chat",
   "chatReadOriginalImageFailed": "Couldn’t read the original image. Try again.",

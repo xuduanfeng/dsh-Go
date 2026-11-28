@@ -1999,7 +1999,9 @@ class ChatController extends Notifier<ChatState> {
     return lost;
   }
 
-  /// Moves a queued prompt into the running turn (`session/updateQueue` steer).
+  /// Moves a queued prompt into the running turn (`session/updateQueue`
+  /// steer). When the turn ends between the tap and the call the message is
+  /// not lost: it is sent as the next turn instead, without stopping anything.
   Future<bool> steerQueued(PendingPrompt prompt) async {
     final id = prompt.inboxId;
     final client = _client;
@@ -2010,17 +2012,42 @@ class ChatController extends Notifier<ChatState> {
       return _currentOperation(operation);
     } on DshRemoteException catch (e) {
       if (!_currentOperation(operation)) return false;
+      if (e.code == 'session/queue-item-not-found') {
+        // The agent took it already: it is in the turn, which is what was asked.
+        return true;
+      }
+      if (e.code != 'session/steer-unavailable') {
+        state = state.copyWith(error: chatErrorText(e, action: appL10n.stateChatSteerFailed));
+        return false;
+      }
+      if (state.running) {
+        // Still running, yet this item cannot join it: say so and leave it in
+        // the queue rather than stopping the turn.
+        state = state.copyWith(error: appL10n.stateChatSteerTooLate);
+        return false;
+      }
+      final moved = await _promote(operation, prompt);
       state = state.copyWith(
-        error: e.code == 'session/steer-unavailable'
-            ? appL10n.stateChatTurnEnded
-            : chatErrorText(e, action: appL10n.stateChatSteerFailed),
+        notice: moved ? appL10n.stateChatTurnEnded : null,
+        error: moved ? null : appL10n.stateChatSendFailed,
       );
-      return false;
+      return moved;
     } catch (e) {
       if (!_currentOperation(operation)) return false;
       state = state.copyWith(error: chatErrorText(e, action: appL10n.stateChatSteerFailed));
       return false;
     }
+  }
+
+  /// Sends a queued [prompt] as a new turn without stopping anything: the
+  /// fallback of 「插话发送」 when the turn ended first, and what 「发送」 does
+  /// for a prompt left waiting with no turn running.
+  Future<bool> _promote(_ChatOperation operation, PendingPrompt prompt) async {
+    if (prompt.isAutomatic || !prompt.resendable) return false;
+    if (!await _takeOut(operation, prompt)) return false;
+    if (!_currentOperation(operation)) return false;
+    final lost = await _putBack(operation, [prompt]);
+    return lost.isEmpty;
   }
 
   /// Takes a prompt back out of the inbox before the agent reads it; the
